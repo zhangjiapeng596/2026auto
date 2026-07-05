@@ -1,6 +1,6 @@
 <launch>
     <!-- 相机参数 (默认对齐 perception.yaml / robot.yaml) -->
-    <arg name="video_device" default="/dev/video0"/>
+    <arg name="video_device" default="/dev/v4l/by-id/usb-HD_USB_Camera_HD_USB_Camera-video-index0"/>
     <arg name="image_width"  default="1920"/>
     <arg name="image_height" default="1080"/>
     <arg name="camera_fps"   default="15"/>
