@@ -8,7 +8,7 @@ robot:
   wheel_diameter_m: 0.097
   min_front_rear_wheelbase_m: 0.24
 
-footprint: [[-0.20, -0.18], [-0.20, 0.18], [0.20, 0.18], [0.20, -0.18]]
+footprint: [[-0.21, -0.19], [-0.21, 0.19], [0.21, 0.19], [0.21, -0.19]]
 
 sensors:
   lidar:
