@@ -12,4 +12,5 @@
   </node>
 
   <node pkg="jie_ware" type="costmap_cleaner" name="costmap_cleaner" output="screen"/>
+  <node pkg="jie_ware" type="lidar_filter_node" name="lidar_filter_node" output="screen"/>
 </launch>
