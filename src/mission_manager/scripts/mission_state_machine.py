@@ -337,6 +337,15 @@ class MissionStateMachine(object):
 
     def _get_current_pose(self):
         """返回最新的机器人位姿 (x, y, yaw)，若无数据则返回 (None, None, None)。"""
+        try:
+            (trans, rot) = self.tf_listener.lookupTransform(
+                'map', 'base_link', rospy.Time(0))
+            x, y = trans[0], trans[1]
+            _, _, yaw = tft.euler_from_quaternion(rot)
+            return x, y, yaw
+        except (ros_tf.LookupException, ros_tf.ConnectivityException,
+                ros_tf.ExtrapolationException, TypeError):
+            pass
         with self._pose_lock:
             if self.current_pose is not None:
                 return self.current_pose
@@ -353,7 +362,8 @@ class MissionStateMachine(object):
             return False
         dist = math.sqrt((rx - x)**2 + (ry - y)**2)
         yaw_diff = self._angle_diff(ryaw, yaw)
-        return dist <= xy_tolerance and yaw_diff <= yaw_tolerance
+        eps = 0.005
+        return dist <= (xy_tolerance + eps) and yaw_diff <= (yaw_tolerance + eps)
 
     def _get_task_footprint_status(self):
         """返回当前任务点 footprint 校验结果。"""
