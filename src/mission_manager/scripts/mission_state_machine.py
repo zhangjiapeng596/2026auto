@@ -467,26 +467,72 @@ class MissionStateMachine(object):
         elif current_step == 'SKIP_TASK':
             self._handle_skip_task(phase)
 
-    def _handle_search_task_image(self, phase):
-        """发送导航目标到视觉位置，然后切换到导航等待状态。"""
+    def _get_vision_goal(self, phase, extra_offset_m=0.0):
+        """计算视觉点导航目标；extra_offset_m 用于继续向场地内侧退让。"""
         vision_cells = self.field_cfg.get('vision_positions', [5, 37, 45, 77])
         vision_cell = vision_cells[phase - 1]
         x, y = get_cell_center_xy(vision_cell, self.field_cfg)
 
-        # 获取车头朝向 (对墙拍照)
         v2t = self.field_cfg.get('vision_to_task', {})
         vinfo = v2t.get(vision_cell, {})
         if isinstance(vinfo, dict):
             yaw = vinfo.get('yaw_rad', 0.0)
             offset_m = vinfo.get('offset_m', 0.0)
         else:
-            yaw = 0.0  # 兼容旧格式 (纯数字)
+            yaw = 0.0
             offset_m = 0.0
 
-        # 向远离围墙方向退后 offset_m (避免车体碰撞墙角)
-        if offset_m > 0:
-            x -= offset_m * math.cos(yaw)
-            y -= offset_m * math.sin(yaw)
+        total_offset = offset_m + extra_offset_m
+        if total_offset > 0:
+            x -= total_offset * math.cos(yaw)
+            y -= total_offset * math.sin(yaw)
+        return x, y, yaw, vision_cell, total_offset
+
+    def _try_vision_recovery(self, phase, reason):
+        """视觉点末端恢复：向远离墙/障碍方向退一个格子边长，再转到拍照角度。"""
+        cell_size = self.field_cfg.get('field', {}).get('cell_size_m', 0.4)
+        nav_cfg = self.mission_cfg.get('navigation', {})
+        timeout_s = nav_cfg.get('vision_recovery_timeout_s', 25.0)
+        xy_tol = nav_cfg.get('vision_recovery_xy_tolerance_m', 0.08)
+        yaw_tol = nav_cfg.get('vision_yaw_tolerance_rad', 0.30)
+        x, y, yaw, vision_cell, offset_m = self._get_vision_goal(
+            phase, extra_offset_m=cell_size)
+
+        rospy.logwarn('[Mission] Phase %d: Vision recovery (%s): cell %d -> '
+                      '(%.3f, %.3f, yaw=%.2f), offset=%.2fm',
+                      phase, reason, vision_cell, x, y, yaw, offset_m)
+
+        self.move_base_client.cancel_goal()
+        rospy.sleep(0.2)
+        self._stop_robot()
+        self._send_nav_goal(x, y, yaw)
+
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            if self._check_aborted():
+                self.move_base_client.cancel_goal()
+                return False
+            state = self.move_base_client.get_state()
+            if state == GoalStatus.SUCCEEDED:
+                rospy.loginfo('[Mission] Phase %d: Vision recovery reached (move_base success)', phase)
+                return True
+            if self._pose_near_goal(x, y, yaw, xy_tol, yaw_tol):
+                rospy.loginfo('[Mission] Phase %d: Vision recovery reached by pose tolerance', phase)
+                self.move_base_client.cancel_goal()
+                return True
+            if state in (GoalStatus.ABORTED, GoalStatus.REJECTED,
+                         GoalStatus.RECALLED, GoalStatus.PREEMPTED, GoalStatus.LOST):
+                rospy.logwarn('[Mission] Phase %d: Vision recovery failed (state=%d)', phase, state)
+                return False
+            rospy.sleep(self.mission_cfg.get('waits', {}).get('nav_poll_interval_s', 0.5))
+
+        rospy.logwarn('[Mission] Phase %d: Vision recovery timed out (%.1fs)', phase, timeout_s)
+        self.move_base_client.cancel_goal()
+        return False
+
+    def _handle_search_task_image(self, phase):
+        """发送导航目标到视觉位置，然后切换到导航等待状态。"""
+        x, y, yaw, vision_cell, offset_m = self._get_vision_goal(phase)
 
         rospy.loginfo('[Mission] Phase %d: Navigating to vision position cell %d (%.3f, %.3f, yaw=%.2f)%s',
                       phase, vision_cell, x, y, yaw,
@@ -534,6 +580,9 @@ class MissionStateMachine(object):
                 else:
                     rospy.logwarn('[Mission] Phase %d: move_base succeeded but no pose for vision verification, retrying',
                                   phase)
+                if self._try_vision_recovery(phase, 'pose_not_verified'):
+                    arrived = True
+                    break
                 self._retry_perception(phase)
                 return
             if self.last_nav_goal is not None:
@@ -552,6 +601,9 @@ class MissionStateMachine(object):
                          GoalStatus.RECALLED, GoalStatus.PREEMPTED, GoalStatus.LOST):
                 rospy.logwarn('[Mission] Phase %d: Nav to vision failed (state=%d), retrying',
                               phase, state)
+                if self._try_vision_recovery(phase, 'nav_failed_state_%d' % state):
+                    arrived = True
+                    break
                 self._retry_perception(phase)
                 return
             poll_interval = self.mission_cfg.get('waits', {}).get('nav_poll_interval_s', 1.0)
@@ -561,8 +613,11 @@ class MissionStateMachine(object):
             rospy.logwarn('[Mission] Phase %d: Nav to vision timed out (%.1fs), retrying',
                           phase, timeout_s)
             self.move_base_client.cancel_goal()
-            self._retry_perception(phase)
-            return
+            if self._try_vision_recovery(phase, 'nav_timeout'):
+                arrived = True
+            else:
+                self._retry_perception(phase)
+                return
 
         self._stop_robot()
         # 到达后稳定等待，确保机器人完全停稳再拍照（避免运动模糊）
