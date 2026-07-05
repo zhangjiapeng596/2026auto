@@ -127,7 +127,7 @@ if [ "${1:-}" = "--stop" ]; then
     pkill -9 -f 'doubao_tts'              2>/dev/null || true
     pkill -9 -f 'top_view_shot_node'      2>/dev/null || true
     pkill -9 -f 'usb_cam_node'            2>/dev/null || true
-    pkill -9 -f 'vlm_node'                2>/dev/null || true
+    pkill -9 -f 'vlm_node'\n    pkill -9 -f 'doubao_worker'\n    pkill -9 -f '3X2KY2'                2>/dev/null || true
     pkill -9 -f 'identify_node'           2>/dev/null || true
     pkill -9 -f 'llm_server'              2>/dev/null || true
     pkill -9 -f 'robot_pose_ekf'          2>/dev/null || true
