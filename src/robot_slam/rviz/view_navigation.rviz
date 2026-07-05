@@ -269,12 +269,12 @@ Visualization Manager:
           Class: rviz/Map
           Color Scheme: costmap
           Draw Behind: true
-          Enabled: false
+          Enabled: true
           Name: Local Costmap (可选调试, 默认关闭)
           Topic: /move_base/local_costmap/costmap
           Unreliable: false
           Use Timestamp: false
-          Value: false
+          Value: true
         - Alpha: 1
           Buffer Length: 1
           Class: rviz/Path
