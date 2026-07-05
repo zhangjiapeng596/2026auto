@@ -44,7 +44,9 @@ track_pid() {
 cleanup_all() {
     local ts
     ts=$(date '+%H:%M:%S' 2>/dev/null || echo "??:??:??")
-    echo "[$ts] [清理] 正在停止所有节点..."
+    echo "[$ts] [清理] 正在响应退出指令并终止所有节点..."
+    bash ${WS_PATH:-$HOME/3X2KY2}/scripts/stop.sh
+    return 0
 
     # L1: SIGTERM 追踪的进程（让 roslaunch 有机会清理子节点）
     for p in $TRACKED_PIDS; do
