@@ -19,7 +19,7 @@ global_costmap:
     - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
   global_frame: map
   robot_base_frame: base_link
-  footprint: [[-0.21, -0.19], [-0.21, 0.19], [0.21, 0.19], [0.21, -0.19]]
+  footprint: [[-0.20, -0.18], [-0.20, 0.18], [0.20, 0.18], [0.20, -0.18]]
   transform_tolerance: 2.0
   update_frequency: 2.0
   publish_frequency: 1.0
@@ -48,7 +48,7 @@ local_costmap:
     - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
   global_frame: odom
   robot_base_frame: base_link
-  footprint: [[-0.21, -0.19], [-0.21, 0.19], [0.21, 0.19], [0.21, -0.19]]
+  footprint: [[-0.20, -0.18], [-0.20, 0.18], [0.20, 0.18], [0.20, -0.18]]
   transform_tolerance: 2.0
   update_frequency: 5.0
   publish_frequency: 2.0
