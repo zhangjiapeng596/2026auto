@@ -398,9 +398,13 @@ class MissionStateMachine(object):
 
     def _handle_wait_for_wakeup(self):
         rospy.loginfo_throttle(5, '[Mission] Waiting for wake word...')
-        # 仿真模式下延迟 5s 自动触发
-        if self.sim_mode and time.time() - self.state_start_time > 5.0:
+        elapsed = time.time() - self.state_start_time
+        # 仿真模式下延迟 5s 自动触发；真实比赛模式下 20s 后按唤醒成功兜底。
+        if self.sim_mode and elapsed > 5.0:
             rospy.loginfo('[Mission] Auto-wakeup triggered (sim mode)')
+            self.transition(MissionState.START_ANNOUNCE)
+        elif (not self.sim_mode) and elapsed > 20.0:
+            rospy.loginfo('[Mission] Auto-wakeup triggered (20s fallback)')
             self.transition(MissionState.START_ANNOUNCE)
 
     def _handle_start_announce(self):
