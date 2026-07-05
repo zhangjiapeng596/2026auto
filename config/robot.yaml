@@ -4,11 +4,11 @@
 robot:
   drive_type: "mecanum"
   max_linear_speed_mps: 1.0
-  size_m: [0.35, 0.30, 0.24]
+  size_m: [0.35, 0.32, 0.24]
   wheel_diameter_m: 0.097
   min_front_rear_wheelbase_m: 0.24
 
-footprint: [[-0.20, -0.18], [-0.20, 0.18], [0.20, 0.18], [0.20, -0.18]]
+footprint: [[-0.20, -0.16], [-0.20, 0.16], [0.20, 0.16], [0.20, -0.16]]
 
 sensors:
   lidar:
