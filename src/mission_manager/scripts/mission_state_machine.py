@@ -15,7 +15,7 @@ import threading
 from std_msgs.msg import String, Empty
 from std_srvs.srv import Empty as EmptySrv
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from actionlib_msgs.msg import GoalStatus
 import actionlib
@@ -127,6 +127,9 @@ class MissionStateMachine(object):
         self.recognition_in_progress = False
         self.seen_image_ids = []  # 已识别的图像 ID，防止重复
         self.last_nav_goal = None  # 最近一次发送给 move_base 的 (x, y, yaw)
+        self.global_costmap = None
+        self.global_costmap_stamp = 0.0
+        self._costmap_lock = threading.Lock()
 
         # ROS 接口
         # TF 位姿 fallback: AMCL /amcl_pose 发布有 bug (仅发1条), 用 TF 作为备胎
@@ -173,6 +176,8 @@ class MissionStateMachine(object):
         rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self._on_amcl_pose)
         rospy.Subscriber('/abot/pose', PoseStamped, self._on_pose)
         rospy.Subscriber('/odom', Odometry, self._on_odom)
+        rospy.Subscriber('/move_base/global_costmap/costmap',
+                         OccupancyGrid, self._on_global_costmap)
         rospy.Subscriber('/tts_done', String, self._on_tts_done)
 
         # TTS 播报完成事件 + 防 stale 的 pending 文本
@@ -247,6 +252,11 @@ class MissionStateMachine(object):
             elif not self.sim_mode and msg.data == 'True':
                 rospy.loginfo('[Mission] Wake word detected!')
                 self.transition(MissionState.START_ANNOUNCE)
+
+    def _on_global_costmap(self, msg):
+        with self._costmap_lock:
+            self.global_costmap = msg
+            self.global_costmap_stamp = time.time()
 
     def _on_vision_result(self, msg):
         if not self.recognition_in_progress:
@@ -937,6 +947,54 @@ class MissionStateMachine(object):
         return not any(self._cell_edge_blocked(cell, edge)
                        for edge in ('N', 'S', 'E', 'W'))
 
+    def _relay_costmap_area_clear(self, x, y):
+        nav_cfg = self.mission_cfg.get('navigation', {})
+        radius = float(nav_cfg.get('finish_relay_clear_radius_m', 0.18))
+        max_cost = int(nav_cfg.get('finish_relay_max_cost', 20))
+        block_unknown = bool(nav_cfg.get('finish_relay_unknown_is_blocked', True))
+        stale_s = float(nav_cfg.get('finish_relay_costmap_stale_s', 3.0))
+
+        with self._costmap_lock:
+            costmap = self.global_costmap
+            stamp = self.global_costmap_stamp
+
+        if costmap is None:
+            return False
+        if time.time() - stamp > stale_s:
+            return False
+
+        info = costmap.info
+        res = float(info.resolution)
+        if res <= 0.0:
+            return False
+
+        origin_x = info.origin.position.x
+        origin_y = info.origin.position.y
+        center_col = int(math.floor((x - origin_x) / res))
+        center_row = int(math.floor((y - origin_y) / res))
+        radius_cells = max(1, int(math.ceil(radius / res)))
+
+        if (center_col < 0 or center_col >= info.width or
+                center_row < 0 or center_row >= info.height):
+            return False
+
+        for row in range(center_row - radius_cells, center_row + radius_cells + 1):
+            for col in range(center_col - radius_cells, center_col + radius_cells + 1):
+                if row < 0 or row >= info.height or col < 0 or col >= info.width:
+                    return False
+                dx = (col - center_col) * res
+                dy = (row - center_row) * res
+                if dx * dx + dy * dy > radius * radius:
+                    continue
+                value = costmap.data[row * info.width + col]
+                if value < 0:
+                    if block_unknown:
+                        return False
+                    continue
+                if value > max_cost:
+                    return False
+        return True
+
     def _select_finish_relay_cell(self):
         rows = int(self.field_cfg.get('field', {}).get('grid_rows', 9))
         cols = int(self.field_cfg.get('field', {}).get('grid_cols', 9))
@@ -951,14 +1009,16 @@ class MissionStateMachine(object):
         excluded.update(self.finish_relay_tried_cells)
 
         candidates = []
-        for row in range(1, rows - 1):
-            for col in range(1, cols - 1):
+        # Avoid cells next to the field frame/inner fence. A relay point needs
+        # extra clearance for local planning, not just a non-border center.
+        for row in range(2, rows - 2):
+            for col in range(2, cols - 2):
                 cell = self._cell_from_row_col(row, col)
                 if cell in excluded:
                     continue
-                if not self._cell_all_edges_clear(cell):
-                    continue
                 cx, cy = get_cell_center_xy(cell, self.field_cfg)
+                if not self._relay_costmap_area_clear(cx, cy):
+                    continue
                 dist_current = math.sqrt((cx - rx)**2 + (cy - ry)**2)
                 dist_finish = math.sqrt((cx - fx)**2 + (cy - fy)**2)
                 score = dist_current + 1.5 * dist_finish

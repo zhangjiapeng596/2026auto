@@ -37,6 +37,10 @@ navigation:
   vision_yaw_tolerance_rad: 0.30   # 视觉点车头朝向容差，约 17.2°
   finish_xy_tolerance_m: 0.08      # 终点位置容差，与任务点 8cm 对齐
   finish_yaw_tolerance_rad: 0.30   # 终点朝向容差（≈17°，终点不强制精确朝向）
+  finish_relay_clear_radius_m: 0.18 # 终点中继点周围代价地图安全检查半径
+  finish_relay_max_cost: 20         # 终点中继点允许的最高代价值，超过则认为不安全
+  finish_relay_unknown_is_blocked: true # 代价地图未知区域不作为中继点
+  finish_relay_costmap_stale_s: 3.0 # 代价地图超过该时间未更新则不选中继点
 
 # ---- 任务点验证 ----
 target_cells:
