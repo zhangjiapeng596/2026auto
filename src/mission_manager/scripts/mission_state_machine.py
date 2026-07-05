@@ -862,7 +862,7 @@ class MissionStateMachine(object):
         self.move_base_client.cancel_goal()
         self._stop_robot()
 
-        text = self.voice_cfg['voice_text'].get('task_skip', u'跳过').format(target_cell=self.target_cell)
+        text = self.voice_cfg['voice_text']['task_arrived'].format(target_cell=self.target_cell)
         self._speak(text, wait=True)
         rospy.loginfo('[Mission] Phase %d: Task cell %d skipped (%d/%d skips used)',
                       phase, self.target_cell, self.task_skip_count,
