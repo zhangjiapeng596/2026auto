@@ -18,6 +18,8 @@ reload(sys)
 sys.setdefaultencoding('utf-8')
 import rospy
 import cv2
+import glob
+import os
 from sensor_msgs.msg import Image
 
 
@@ -50,6 +52,40 @@ def _open_capture(device, width, height):
     return cap
 
 
+def _device_candidates(preferred):
+    candidates = []
+    for dev in [preferred,
+                '/dev/v4l/by-id/usb-HD_USB_Camera_HD_USB_Camera-video-index0']:
+        if dev not in candidates:
+            candidates.append(dev)
+    for dev in sorted(glob.glob('/dev/video*')):
+        if dev not in candidates:
+            candidates.append(dev)
+    return candidates
+
+
+def _open_working_capture(preferred, width, height):
+    """打开并确认能读到帧；摄像头重枚举时自动尝试 by-id 与 /dev/video*。"""
+    for dev in _device_candidates(preferred):
+        if isinstance(dev, str) and dev.startswith('/dev/') and not os.path.exists(dev):
+            continue
+        cap = _open_capture(dev, width, height)
+        if not cap.isOpened():
+            cap.release()
+            continue
+
+        ok_frames = 0
+        for _ in range(10):
+            ret, _frame = cap.read()
+            if ret and _frame is not None:
+                ok_frames += 1
+                if ok_frames >= 2:
+                    return cap, dev, ok_frames
+            rospy.sleep(0.05)
+        cap.release()
+    return None, None, 0
+
+
 def main():
     rospy.init_node('usb_cam_node', anonymous=False)
 
@@ -62,26 +98,21 @@ def main():
 
     pub = rospy.Publisher(topic, Image, queue_size=2)
 
-    cap = _open_capture(device, width, height)
-    if not cap.isOpened():
-        rospy.logerr('[usb_cam] 无法打开摄像头 device=%s, 检查 /dev/video* 与权限', str(device))
+    cap = None
+    active_device = device
+    while not rospy.is_shutdown() and cap is None:
+        cap, active_device, warmup_mean = _open_working_capture(device, width, height)
+        if cap is None:
+            rospy.logwarn('[usb_cam] 未找到可读摄像头, candidates=%s, 1s 后重试',
+                          ', '.join([str(x) for x in _device_candidates(device)]))
+            rospy.sleep(1.0)
+    if rospy.is_shutdown():
         return
-
-    # 暖机：丢弃前几帧（USB 摄像头刚打开时帧可能全黑/曝光未稳定）
-    warmup_frames = 5
-    warmup_mean = 0.0
-    for i in range(warmup_frames):
-        ret, _ = cap.read()
-        if ret:
-            warmup_mean += 1.0
-    warmup_ok = warmup_mean >= (warmup_frames - 1)  # 至少 N-1 帧成功
-    if not warmup_ok:
-        rospy.logwarn('[usb_cam] 暖机期间仅成功 %d/%d 帧，图像可能异常', int(warmup_mean), warmup_frames)
 
     actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     rospy.loginfo('[usb_cam] 已打开 device=%s, 分辨率 %dx%d, 发布 %s @ %dHz',
-                  str(device), actual_w, actual_h, topic, fps)
+                  str(active_device), actual_w, actual_h, topic, fps)
 
     if actual_w != width or actual_h != height:
         rospy.logwarn('[usb_cam] 请求 %dx%d, 实际 %dx%d — 摄像头不支持请求分辨率!',
@@ -99,7 +130,12 @@ def main():
             if fail_count >= 30:
                 rospy.logerr('[usb_cam] 连续 30 帧读取失败, 尝试重新打开摄像头')
                 cap.release()
-                cap = _open_capture(device, width, height)
+                cap = None
+                while not rospy.is_shutdown() and cap is None:
+                    cap, active_device, _ = _open_working_capture(device, width, height)
+                    if cap is None:
+                        rospy.logwarn('[usb_cam] 摄像头重连失败, 1s 后重试')
+                        rospy.sleep(1.0)
                 fail_count = 0
             rate.sleep()
             continue
