@@ -28,6 +28,7 @@ sleep 1
 
 source /opt/ros/melodic/setup.bash
 source "$WS_PATH/devel/setup.bash"
+export PATH="/usr/bin:/opt/ros/melodic/bin:$PATH"
 export ROS_MASTER_URI=http://localhost:11311
 export ROS_HOSTNAME=localhost
 export DISPLAY=${DISPLAY:-:0}
@@ -63,6 +64,17 @@ wait_topic() {
     return 1
 }
 
+wait_node() {
+    local node="$1"
+    local tries="${2:-40}"
+    for _i in $(seq 1 "$tries"); do
+        timeout 2 rosnode list 2>/dev/null | grep -qx "$node" && return 0
+        sleep 1
+    done
+    echo "[warn] timed out waiting for node $node, continuing"
+    return 1
+}
+
 roscore >"$LOG_DIR/roscore.log" 2>&1 &
 track $!
 wait_master
@@ -73,7 +85,7 @@ wait_topic /scan_filtered 50
 
 roslaunch robot_slam navigation.launch map_name:="$MAP_NAME" >"$LOG_DIR/navigation.log" 2>&1 &
 track $!
-wait_topic /move_base/status 70
+wait_node /move_base 70
 
 roslaunch robot_slam view_nav.launch >"$LOG_DIR/rviz.log" 2>&1 &
 track $!
