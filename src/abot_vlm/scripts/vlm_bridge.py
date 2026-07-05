@@ -118,13 +118,6 @@ class VlmBridge(object):
         cv2.imwrite(img_path, img_bgr)
         rospy.loginfo('[VLM] Image saved: %s', img_path)
 
-        # 在 ABOT 屏幕显示当前捕获图像
-        try:
-            cv2.imshow('VLM Capture', img_bgr)
-            cv2.waitKey(1)
-        except Exception:
-            pass
-
         # 亮度检查：过暗/过曝时 warn（帮助诊断现场问题，不阻断流程）
         mean_brightness = img_bgr.mean()
         if mean_brightness < 10.0:
