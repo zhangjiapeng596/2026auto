@@ -111,8 +111,9 @@ def check_footprint_in_region(robot_x, robot_y, robot_yaw, footprint, cell_numbe
     task_w, task_h = field_config['task_region']['size_m']
 
     # 任务区域多边形的四个顶点（轴对齐矩形）
-    half_w = task_w / 2.0
-    half_h = task_h / 2.0
+    margin = 0.06
+    half_w = (task_w / 2.0) + margin
+    half_h = (task_h / 2.0) + margin
     region_polygon = [
         (cx - half_w, cy - half_h),
         (cx + half_w, cy - half_h),

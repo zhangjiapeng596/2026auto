@@ -14,6 +14,7 @@
 
 # ---- 全局代价地图 (4m×4m，覆盖 3.6m 场地 + 边距) ----
 global_costmap:
+  always_send_full_costmap: true
   global_frame: map
   robot_base_frame: base_link
   transform_tolerance: 2.0
@@ -32,6 +33,7 @@ global_costmap:
 
 # ---- 局部代价地图 (2m×2m 滚动窗口) ----
 local_costmap:
+  always_send_full_costmap: true
   global_frame: odom
   robot_base_frame: base_link
   transform_tolerance: 2.0

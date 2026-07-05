@@ -22,7 +22,7 @@ cell_index_convention:
 
 start_cells: [1, 81]
 finish_cell: 9
-finish_offset_m: 0.0   # 车体完全停入 9 号格子内
+finish_offset_m: 0.15   # 车体完全停入 9 号格子内
 
 # 9 个候选任务区 (中央 3×3 区域)
 task_cells: [31, 32, 33, 40, 41, 42, 49, 50, 51]
