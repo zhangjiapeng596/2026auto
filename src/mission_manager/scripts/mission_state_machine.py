@@ -416,6 +416,7 @@ class MissionStateMachine(object):
         # AMCL 冷启动收敛旋转: 原地旋转产生多方向激光配准，加速粒子群收敛 (~5s)
         if not self.sim_mode:
             self._convergence_rotate()
+            self._startup_backoff()
         if self._check_aborted():
             return  # 旋转期间收到安全 ESTOP，保留 abort 状态
         self.task_index = 0
@@ -1043,6 +1044,20 @@ class MissionStateMachine(object):
         self._stop_robot()
         rospy.sleep(0.5)  # 停稳
         rospy.loginfo('[Mission] AMCL convergence rotate: done')
+
+    def _startup_backoff(self):
+        """开局定位旋转后后退约 5cm，再开始第一个识别点导航。"""
+        rospy.loginfo('[Mission] Startup backoff: backing up ~0.05m')
+        twist = Twist()
+        twist.linear.x = -0.05
+        t0 = time.time()
+        while time.time() - t0 < 1.0 and not rospy.is_shutdown() and not self._check_aborted():
+            self.cmd_vel_pub.publish(twist)
+            rospy.sleep(0.05)
+
+        self._stop_robot()
+        rospy.sleep(0.3)
+        rospy.loginfo('[Mission] Startup backoff: done')
 
     def _send_nav_goal(self, x, y, yaw=0.0):
         """通过 move_base actionlib 发送导航目标。"""
