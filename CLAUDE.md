@@ -3,7 +3,7 @@
 ## ⚠️ 铁律（不可违反）
 
 1. **未经用户审查和明确同意，禁止提交或推送代码** — 包括本地 `git commit` 和远端推送。写完代码后必须先让用户审查，用户说"commit"才能提交
-2. **禁止触碰 ABOT 原厂 `~/abot_ws/`** — 只操作 `~/3X2KY2_backup2/`
+2. **禁止触碰 ABOT 原厂 `~/abot_ws/`** — 只操作 `~/3X2KY2/`
 3. **禁止修改实车共享文件而不评估影响** — 这些文件原厂也在用：`navigation.launch`、`costmap_common_params.yaml`、`amcl.launch.xml`、`robot_with_imu.launch` 及其 include 链
 4. **禁止未经验证就声称"修好了"** — 修改仿真相关代码后必须在 WSL 跑完整仿真；实车相关代码须远端验证
 5. **最小侵入修改** — 不引入非必要大型依赖，优先最小可验证修改
@@ -13,25 +13,25 @@
 
 ```bash
 # WSL 仿真完整测试（一键，自动同步+编译前清理）
-wsl bash /mnt/d/edge下载/3X2KY2_backup2/scripts/sim_full_test.sh
+wsl bash /mnt/d/edge下载/3X2KY2/scripts/sim_full_test.sh
 
 # 远端同步（Windows → ABOT）
-tar czf - --exclude='__pycache__' --exclude='*.pyc' --exclude='.git' -C <本机仓库> src config scripts | ssh abot@<IP> 'cd ~/3X2KY2_backup2 && tar xzf -'
+tar czf - --exclude='__pycache__' --exclude='*.pyc' --exclude='.git' -C <本机仓库> src config scripts | ssh abot@<IP> 'cd ~/3X2KY2 && tar xzf -'
 
 # 远端单文件同步
-scp <本地路径> abot@<IP>:~/3X2KY2_backup2/<远端路径>
+scp <本地路径> abot@<IP>:~/3X2KY2/<远端路径>
 
 # 远端编译
-ssh abot@<IP> 'source /opt/ros/melodic/setup.bash && cd ~/3X2KY2_backup2 && catkin_make'
+ssh abot@<IP> 'source /opt/ros/melodic/setup.bash && cd ~/3X2KY2 && catkin_make'
 
 # 远端启动比赛
-ssh abot@<IP> 'bash ~/3X2KY2_backup2/scripts/competition.sh competition_field true'
+ssh abot@<IP> 'bash ~/3X2KY2/scripts/competition.sh competition_field true'
 
 # 远端优雅停止（不再需要 pkill 盲杀）
-ssh abot@<IP> 'bash ~/3X2KY2_backup2/scripts/competition.sh --stop'
+ssh abot@<IP> 'bash ~/3X2KY2/scripts/competition.sh --stop'
 
 # 远端监控
-ssh abot@<IP> 'source /opt/ros/melodic/setup.bash && source ~/3X2KY2_backup2/devel/setup.bash && rosrun robot_slam nav_monitor.py'
+ssh abot@<IP> 'source /opt/ros/melodic/setup.bash && source ~/3X2KY2/devel/setup.bash && rosrun robot_slam nav_monitor.py'
 
 # ASR 语音识别测试（免 ROS 环境）
 python tools/test_doubao_asr_flash.py
@@ -39,8 +39,8 @@ python tools/test_doubao_asr_flash.py
 
 ## 环境
 
-- **本机**: Windows WSL Ubuntu 18.04 + ROS Melodic，工作空间 `~/3X2KY2_backup2/`
-- **远端**: ABOT `172.16.26.119`。开发工作空间 `~/3X2KY2_backup2/`
+- **本机**: Windows WSL Ubuntu 18.04 + ROS Melodic，工作空间 `~/3X2KY2/`
+- **远端**: ABOT `172.16.26.119`。开发工作空间 `~/3X2KY2/`
 - **远端当前 IP** 以用户告知为准。连接方式为 SSH `abot@<IP>`
 
 ### 解释器隔离
@@ -59,35 +59,35 @@ python tools/test_doubao_asr_flash.py
 
 ### 上机
 用户说"上机"/"推送"/"远端测试"时：
-1. **增量同步**：仅 scp 变更的文件到 ABOT `~/3X2KY2_backup2/`（禁止全量 tar，减少耗时）
+1. **增量同步**：仅 scp 变更的文件到 ABOT `~/3X2KY2/`（禁止全量 tar，减少耗时）
 2. 在远端 `catkin_make` 编译（仅 C++ 修改时需要；纯 Python 修改跳过）
-3. Source `~/3X2KY2_backup2/devel/setup.bash` 运行
+3. Source `~/3X2KY2/devel/setup.bash` 运行
 
 ### 增量同步示例
 ```bash
 # 单文件
-scp <本地路径> abot@<IP>:~/3X2KY2_backup2/<远端路径>
+scp <本地路径> abot@<IP>:~/3X2KY2/<远端路径>
 # 多文件
-scp <本地路径1> <本地路径2> abot@<IP>:~/3X2KY2_backup2/<远端路径>/
+scp <本地路径1> <本地路径2> abot@<IP>:~/3X2KY2/<远端路径>/
 ```
 
 ### 两端同步
 用户说"两端同步"/"同步"时：
-1. 本机是源码唯一源头（git 仓库），远端 `~/3X2KY2_backup2/` 不是 git 仓库
+1. 本机是源码唯一源头（git 仓库），远端 `~/3X2KY2/` 不是 git 仓库
 2. **本机 → 远端**：scp 本机修改过的文件到 ABOT 对应路径
 3. **本机 → GitHub**：`git commit` + `git push` 将改动提交到远端仓库
 4. 提交完成后确认两端一致
 
 ### 下机
 用户说"下机"/"远端使用时间结束"时：
-1. 将远端 `~/3X2KY2_backup2/` 修改文件 `scp` 回本机
+1. 将远端 `~/3X2KY2/` 修改文件 `scp` 回本机
 2. 确认改动已同步后告知用户
-3. ABOT 公用 → 清远端源码（保留 devel/build 免重编译）：`ssh abot@<IP> 'rm -rf ~/3X2KY2_backup2/src ~/3X2KY2_backup2/config ~/3X2KY2_backup2/scripts ~/3X2KY2_backup2/launch'`
+3. ABOT 公用 → 清远端源码（保留 devel/build 免重编译）：`ssh abot@<IP> 'rm -rf ~/3X2KY2/src ~/3X2KY2/config ~/3X2KY2/scripts ~/3X2KY2/launch'`
 
 ### 启动前检查
 - SSH 到 ABOT，`ps aux | grep ros` 确认无人占用
 - 若原厂 `~/demo/` 系统在跑，等其结束
-- 若需强制清理：`ssh abot@<IP> 'bash ~/3X2KY2_backup2/scripts/competition.sh --stop'`
+- 若需强制清理：`ssh abot@<IP> 'bash ~/3X2KY2/scripts/competition.sh --stop'`
 
 ### 进程管理（防僵尸）
 四脚本全部加了 `trap cleanup EXIT INT TERM`，四层清理（SIGTERM → sleep 3s → SIGKILL → pkill 兜底）：

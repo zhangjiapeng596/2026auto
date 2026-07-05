@@ -12,7 +12,7 @@
 #   trap EXIT INT TERM 防僵尸进程 — Ctrl+C 或异常退出自动清理
 # ============================================
 
-WS_PATH="${WS_PATH:-${HOME}/3X2KY2_backup2}"
+WS_PATH="${WS_PATH:-${HOME}/3X2KY2}"
 MAP_NAME="${1:-game}"
 
 # ============================================

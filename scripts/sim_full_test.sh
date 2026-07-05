@@ -7,7 +7,7 @@
 set -eu
 set -o pipefail
 
-WS="${WS_PATH:-$HOME/3X2KY2_backup2}"
+WS="${WS_PATH:-$HOME/3X2KY2}"
 LOG="/tmp/sim_full.log"
 SRC="${SRC:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 PIDFILE="/tmp/sim_full.pid"

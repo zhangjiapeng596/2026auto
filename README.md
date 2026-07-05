@@ -36,7 +36,7 @@
 |---|---|
 | OS | Windows WSL Ubuntu 18.04 |
 | ROS | Melodic (Python 2.7) |
-| 工作空间 | `~/3X2KY2_backup2/` (catkin) |
+| 工作空间 | `~/3X2KY2/` (catkin) |
 | 仿真 | 先验地图 + mock 数据 |
 | 远端设备 | ABOT 机器人 `172.16.26.119` |
 
@@ -127,7 +127,7 @@ ABOT 机器人底层硬件驱动，**不改动**。
 
 ```bash
 source /opt/ros/melodic/setup.bash
-cd ~/3X2KY2_backup2
+cd ~/3X2KY2
 catkin_make
 source devel/setup.bash
 ```
@@ -136,7 +136,7 @@ source devel/setup.bash
 
 ```bash
 # 一键：同步源码 → 启动 → 监控 → 报告
-bash /mnt/d/edge下载/3X2KY2_backup2/scripts/sim_full_test.sh
+bash /mnt/d/edge下载/3X2KY2/scripts/sim_full_test.sh
 ```
 
 自动完成：清理 → 同步 Windows 源码到 WSL → 启动 9 个节点 → 等待比赛完成 → 输出报告。
@@ -145,12 +145,12 @@ bash /mnt/d/edge下载/3X2KY2_backup2/scripts/sim_full_test.sh
 
 ```bash
 # 先手动同步一次
-cp /mnt/d/.../src/mission_manager/**/*.py ~/3X2KY2_backup2/src/mission_manager/
-cp /mnt/d/.../config/*.yaml ~/3X2KY2_backup2/config/
-cp /mnt/d/.../src/robot_slam/maps/competition_field.* ~/3X2KY2_backup2/src/robot_slam/maps/
+cp /mnt/d/.../src/mission_manager/**/*.py ~/3X2KY2/src/mission_manager/
+cp /mnt/d/.../config/*.yaml ~/3X2KY2/config/
+cp /mnt/d/.../src/robot_slam/maps/competition_field.* ~/3X2KY2/src/robot_slam/maps/
 
 # 再启动
-source /opt/ros/melodic/setup.bash && source ~/3X2KY2_backup2/devel/setup.bash
+source /opt/ros/melodic/setup.bash && source ~/3X2KY2/devel/setup.bash
 roslaunch mission_manager sim_full_mission.launch map_name:=competition_field
 ```
 

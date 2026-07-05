@@ -12,8 +12,8 @@
 #   节点: 同上但不启动 GameStart, 状态机 5s 后自动进入流程
 #
 # SSH 启动: 自动检测 SSH_TTY，使用 setsid 后台模式替代 GNOME 终端
-#   用法: ssh abot@IP 'bash ~/3X2KY2_backup2/scripts/competition.sh competition_field true'
-#   停止: ssh abot@IP 'bash ~/3X2KY2_backup2/scripts/competition.sh --stop'
+#   用法: ssh abot@IP 'bash ~/3X2KY2/scripts/competition.sh competition_field true'
+#   停止: ssh abot@IP 'bash ~/3X2KY2/scripts/competition.sh --stop'
 #
 # 数据流:
 #   game_node --/start--> mission_state_machine  (仅模式1)
@@ -28,7 +28,7 @@
 #   - SSH 模式: 内层 setsid 脚本自带 trap，外层可通过 PID 文件精准停止
 # ============================================
 
-WS_PATH="${WS_PATH:-${HOME}/3X2KY2_backup2}"
+WS_PATH="${WS_PATH:-${HOME}/3X2KY2}"
 PIDFILE=/tmp/abot_competition.pid
 INNER_SCRIPT=/tmp/abot_competition_inner.sh
 

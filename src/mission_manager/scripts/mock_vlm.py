@@ -22,7 +22,7 @@ from std_msgs.msg import String
 # config 搜索路径
 CONFIG_PATHS = [
     os.path.join(os.path.dirname(__file__), '..', '..', '..', 'config'),
-    os.path.join(os.path.expanduser('~'), '3X2KY2_backup2', 'config'),
+    os.path.join(os.path.expanduser('~'), '3X2KY2', 'config'),
     os.path.join(os.environ.get('WS_PATH', ''), 'config'),
 ]
 

@@ -16,7 +16,7 @@ class MissionLogger(object):
 
     def __init__(self, base_dir=None):
         if base_dir is None:
-            workspace = os.environ.get('WS_PATH', os.path.expanduser('~/3X2KY2_backup2'))
+            workspace = os.environ.get('WS_PATH', os.path.expanduser('~/3X2KY2'))
             base_dir = os.path.join(workspace, 'logs')
         run_id = datetime.now().strftime('run_%Y%m%d_%H%M%S')
         self.run_dir = os.path.join(base_dir, run_id)

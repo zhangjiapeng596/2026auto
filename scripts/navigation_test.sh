@@ -10,7 +10,7 @@
 #   trap EXIT INT TERM 防僵尸进程 — Ctrl+C 或异常退出自动清理
 # ============================================
 
-WS_PATH="${WS_PATH:-${HOME}/3X2KY2_backup2}"
+WS_PATH="${WS_PATH:-${HOME}/3X2KY2}"
 # 地图名不带 .yaml 则自动补全
 MAP_NAME="${1:-competition_field}"
 [[ "$MAP_NAME" != *.yaml ]] && MAP_NAME="${MAP_NAME}.yaml"
