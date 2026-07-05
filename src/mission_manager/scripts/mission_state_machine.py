@@ -1046,12 +1046,12 @@ class MissionStateMachine(object):
         rospy.loginfo('[Mission] AMCL convergence rotate: done')
 
     def _startup_backoff(self):
-        """开局定位旋转后后退约 5cm，再开始第一个识别点导航。"""
-        rospy.loginfo('[Mission] Startup backoff: backing up ~0.05m')
+        """开局定位旋转后后退约 10cm，再开始第一个识别点导航。"""
+        rospy.loginfo('[Mission] Startup backoff: backing up ~0.10m')
         twist = Twist()
         twist.linear.x = -0.05
         t0 = time.time()
-        while time.time() - t0 < 1.0 and not rospy.is_shutdown() and not self._check_aborted():
+        while time.time() - t0 < 2.0 and not rospy.is_shutdown() and not self._check_aborted():
             self.cmd_vel_pub.publish(twist)
             rospy.sleep(0.05)
 

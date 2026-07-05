@@ -23,7 +23,7 @@
 #   safety_monitor --/safety_status--> mission_state_machine
 #
 # 进程管理 (防僵尸进程):
-#   - trap EXIT INT TERM: 无论脚本因何退出，都会清理所有子进程
+#   - trap EXIT INT TERM / 按 Enter: 统一调用 scripts/stop.sh 清理所有节点
 #   - SIGTERM → sleep 3 → SIGKILL → pkill 兜底 (四层保障)
 #   - SSH 模式: 内层 setsid 脚本自带 trap，外层可通过 PID 文件精准停止
 # ============================================
@@ -604,15 +604,16 @@ else
     echo "窗1: roscore"
     echo "窗2: 底盘驱动 (abot_driver + IMU + LiDAR + EKF)"
     echo "窗3: 导航栈 (map_server + lidar_loc + move_base)"
-    echo "窗4: $([ "${SIM_MODE}" = "false" ] && echo '豆包 ASR 语音识别 + ')/VLM 视觉 + TTS 语音"
-    echo "窗5: 任务状态机 + 安全监控"
+    echo "窗4: 任务状态机 + 安全监控"
+    echo "窗5: $([ "${SIM_MODE}" = "false" ] && echo '豆包 ASR 语音识别 + ')/VLM 视觉 + TTS 语音"
     echo "窗6: RViz 可视化"
     echo ""
     echo "关闭所有 GNOME 终端窗口即停止全部节点"
     echo "或 Ctrl+C 触发全局清理"
     [ "${SIM_MODE}" = "false" ] && echo "说出'开始比赛'启动..." || echo "模式3: 5s 后自动开始"
 
-    echo "按 Enter 停止所有节点..."
+    echo "按 Enter 退出并清理所有节点..."
     read _line
-    cleanup_all
+    trap - EXIT INT TERM
+    bash "${WS_PATH}/scripts/stop.sh"
 fi
