@@ -1,0 +1,29 @@
+# config/robot.yaml
+# 机器人自身参数：尺寸、footprint、传感器、驱动方式
+
+robot:
+  drive_type: "mecanum"
+  max_linear_speed_mps: 1.0
+  size_m: [0.35, 0.30, 0.24]
+  wheel_diameter_m: 0.097
+  min_front_rear_wheelbase_m: 0.24
+
+footprint: [[-0.185, -0.16], [-0.185, 0.16], [0.185, 0.16], [0.185, -0.16]]
+
+sensors:
+  lidar:
+    fov_deg: 360
+    range_m: [0.15, 12.0]
+    topic: "/scan_filtered"
+    frame: "laser_link"
+  camera:
+    resolution: "1920x1080"
+    max_fps: 120
+    fov_deg: 120
+    topic: "/usb_cam/image_raw"
+    frame: "usb_cam"
+  imu:
+    axes: 9
+    topic: "/imu"
+  encoder:
+    lines_per_rev_after_multiplier: 3960

@@ -1,0 +1,35 @@
+<launch>
+  <!-- 仿真导航测试：带噪声的 mock 硬件 + AMCL 定位 + move_base -->
+  <arg name="map_name" default="competition_field"/>
+
+  <!-- 1. 先验地图 -->
+  <node pkg="map_server" type="map_server" name="map_server"
+        args="$(find robot_slam)/maps/$(arg map_name).yaml"/>
+
+  <!-- 2. URDF 机器人模型 (sim_robot 发 /joint_states 驱动 robot_state_publisher) -->
+  <param name="robot_description" textfile="$(find abot_model)/urdf/abot_model.urdf"/>
+  <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher"/>
+
+  <!-- 3. 仿真机器人 (odom→base_footprint + map→odom TF, 围墙+挡板激光点云) -->
+  <node pkg="mission_manager" type="sim_robot.py" name="sim_robot" output="screen">
+    <param name="init_x" value="-1.6"/>     <!-- Cell 1 中心，与实车 /initialpose 一致 -->
+    <param name="init_y" value="1.6"/>
+    <param name="init_yaw" value="0.0"/>
+  </node>
+
+  <!-- 4. move_base 导航栈 (仿真定位由 sim_robot 的 map→odom 直接提供) -->
+  <!-- 注: AMCL 单独测试时启用下面这段, 并注释 sim_robot 的 map→odom 发布 -->
+  <!--
+  <include file="$(find robot_slam)/launch/include/amcl.launch.xml">
+    <arg name="scan_topic" value="scan_filtered"/>
+    <arg name="initial_pose_x" value="-1.6"/>
+    <arg name="initial_pose_y" value="1.6"/>
+    <arg name="initial_pose_a" value="0.0"/>
+  </include>
+  -->
+  <include file="$(find robot_slam)/launch/include/move_base.launch.xml"/>
+  <!-- 仿真: 缩小膨胀半径 (围墙已知精确位置, 不需 5cm 膨胀) -->
+  <param name="move_base/local_costmap/inflation_radius" value="0.02"/>
+  <param name="move_base/global_costmap/inflation_radius" value="0.02"/>
+
+</launch>

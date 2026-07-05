@@ -1,0 +1,21 @@
+<launch>
+  <!-- 地面巡航比赛完整启动入口 -->
+  <arg name="sim_mode" default="true"/>
+  <arg name="map_name" default="game"/>
+
+  <!-- 1. 唤醒词检测 (Snowboy hotword) -->
+  <include file="$(find robot_slam)/launch/GameStart.launch"/>
+
+  <!-- 2. 导航栈 (move_base + AMCL/Cartographer + map_server) -->
+  <include file="$(find robot_slam)/launch/navigation.launch">
+    <arg name="map_name" value="$(arg map_name)"/>
+  </include>
+
+  <!-- 3. 任务图像识别 (VLM) -->
+  <include file="$(find abot_vlm)/launch/vlm_node.launch"/>
+
+  <!-- 4. 任务状态机 + 安全监控 + 配置加载 -->
+  <include file="$(find mission_manager)/launch/sim_mission.launch">
+    <arg name="sim_mode" value="$(arg sim_mode)"/>
+  </include>
+</launch>

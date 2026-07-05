@@ -1,0 +1,27 @@
+<launch>
+  <!-- 比赛系统仿真启动文件：加载配置 + 启动状态机 + 安全监控 -->
+  <arg name="sim_mode" default="true"/>
+  <arg name="config_dir" default="$(find mission_manager)/../../config"/>
+
+  <!-- competition_field.yaml 的 vision_to_task 用整数 key (5/37/45/77)，roslaunch 的
+       <rosparam load> 会在 ns_join 对 int key 崩 (TypeError: 'int' object ...)。
+       状态机通过 config_loader.load_config 直接读该文件 (PyYAML 整数 key 无碍)，从不读此
+       param namespace，故此行冗余且有害，移除。其余 5 个 param load 无整数 key、保留无害。 -->
+  <!-- <rosparam command="load" file="$(arg config_dir)/competition_field.yaml" ns="competition_field"/> -->
+  <rosparam command="load" file="$(arg config_dir)/mission.yaml" ns="mission"/>
+  <rosparam command="load" file="$(arg config_dir)/robot.yaml" ns="robot"/>
+  <rosparam command="load" file="$(arg config_dir)/navigation.yaml" ns="navigation"/>
+  <rosparam command="load" file="$(arg config_dir)/perception.yaml" ns="perception"/>
+  <rosparam command="load" file="$(arg config_dir)/voice_text.yaml" ns="voice_text"/>
+
+  <node pkg="mission_manager" type="mission_state_machine.py" name="mission_state_machine" output="screen">
+    <param name="sim_mode" value="$(arg sim_mode)"/>
+    <remap from="/odom" to="/wheel_odom"/>
+  </node>
+
+  <node pkg="mission_manager" type="safety_monitor.py" name="safety_monitor" output="screen">
+    <param name="heartbeat_timeout_s" value="10.0"/>  <!-- 放宽，避免 init 期间误判 -->
+    <param name="no_motion_timeout_s" value="60.0"/>  <!-- 给 DWA 足够时间从墙角生成速度 -->
+    <remap from="/odom" to="/wheel_odom"/>
+  </node>
+</launch>

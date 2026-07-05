@@ -1,0 +1,57 @@
+# config/mission.yaml
+# 比赛任务全局参数：超时、重试、语音、等待时长
+
+mission:
+  map_name: competition_field      # 地图名 (competition_field / game / my_lab)
+  max_time_s: 600                  # 比赛总时长上限 (10分钟)
+  required_task_image_count: 4     # 需要完成的任务图像数量
+  require_start_voice: true        # 是否需要开始语音
+  require_finish_voice: true       # 是否需要结束语音
+  stop_before_voice: true          # 语音播报前是否停车
+  voice_static_hold_s: 0.5         # 播报前停稳时间
+  localization_required: true      # 是否需要定位
+  retry_on_low_confidence: true    # 低置信度是否重试
+
+# ---- 超时配置 ----
+timeouts:
+  no_motion_after_start_s: 40      # 启动后无运动超时 (safety_monitor 用)，放宽给 costmap 初始化
+  no_state_change_s: 180           # 单状态最长停留时间 (导航+识别可能较长)
+  perception_retry_limit: 1        # 识别失败最大重试次数 (省token，仅重试1次)
+  navigation_retry_limit: 2        # 导航失败最大重试次数
+  max_task_skips: 1               # 最多跳过几个不可达任务点，超限后 ABORT
+  footprint_retry_limit: 2         # 到达后 footprint 修正次数，避免厘米级误差反复等待
+  navigation_goal_timeout_s: 90    # 单次导航超时（放宽到90s，容忍膨胀层绕行）
+  nav_stuck_timeout_s: 10.0        # 导航卡死检测 (位移<2cm且yaw变化<0.05rad)
+
+# ---- 等待时长 (全部可调) ----
+waits:
+  arrival_stabilize_s: 1.8         # 导航到达后位姿稳定等待（+1s 确保转向完全停稳再拍照）
+  vision_trigger_delay_s: 0.5      # 到达视觉点后停车等稳再触发VLM
+  nav_poll_interval_s: 0.5         # 导航轮询间隔
+  speak_hold_s: 0.5                # 播报前停稳时间
+
+# ---- 导航到达容差 ----
+navigation:
+  task_center_tolerance_m: 0.08    # 任务点中心容差；DWA 6cm + 状态机 8cm，消除精度差
+  vision_xy_tolerance_m: 0.04      # 视觉点位置容差，避免 move_base 末端旋转恢复拖满超时
+  vision_yaw_tolerance_rad: 0.12   # 视觉点车头朝向容差，约 6.9°
+  finish_xy_tolerance_m: 0.08      # 终点位置容差，与任务点 8cm 对齐
+  finish_yaw_tolerance_rad: 0.30   # 终点朝向容差（≈17°，终点不强制精确朝向）
+
+# ---- 任务点验证 ----
+target_cells:
+  valid: [31, 32, 33, 40, 41, 42, 49, 50, 51]
+  description: "VLM 返回的目标点必须在此列表中，否则视为识别失败"
+
+# ---- 识别置信度 ----
+confidence:
+  min_confidence: 0.6              # 最低置信度, 低于此值触发重试
+  description: "低于此置信度触发重识别或人工介入"
+
+# ---- 定位丢失监控 (仅实机有 /amcl_pose 时生效; 仿真用 odom 不触发) ----
+localization:
+  monitor_enabled: true            # 是否启用 AMCL 定位发散监控
+  max_pos_std_m: 0.8               # 位置标准差阈值(m), 超过视为粒子群发散 (实车站立起步 std~0.43m, 放宽容忍未运动收敛)
+  max_yaw_std_rad: 0.5             # 朝向标准差阈值(rad)
+  lost_duration_s: 6.0             # 发散需持续多久才判定丢失(s), 防单次抖动误判 (放宽容忍运动中短暂波动)
+  amcl_stale_s: 0.0                # 0=禁用 stale 检查 (AMCL 1.16.7 /amcl_pose 发布有 bug，仅发1条后停止)

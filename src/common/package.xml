@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>common</name>
+  <version>1.0.0</version>
+  <description>Common utilities: config loading, logging, data types</description>
+  <maintainer email="lx_hm@example.com">lx_hm</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  <exec_depend>rospy</exec_depend>
+</package>

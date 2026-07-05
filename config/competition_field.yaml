@@ -1,0 +1,64 @@
+# config/competition_field.yaml
+# 比赛场地完整描述：尺寸、网格、起终点、任务点、障碍物、任务图像位置
+
+field:
+  size_m: [3.6, 3.6]
+  grid_rows: 9
+  grid_cols: 9
+  cell_size_m: 0.4
+  fence_height_m: 0.30
+
+# 网格编号约定：PDF 图中 1 在左上角(西北)，9 在右上角(东北)，
+# 73 在左下角(西南)，81 在右下角(东南)。
+# map 坐标系：以场地中心为原点，x 轴向东，y 轴向北。
+cell_index_convention:
+  description: >
+    网格 1 在左上角，按行优先排列。
+    网格编号 N 对应的 map 坐标：
+      row = (N - 1) // 9   (0 为最北行)
+      col = (N - 1) % 9    (0 为最西列)
+      x = (col - 4) * 0.4
+      y = (4 - row) * 0.4
+
+start_cells: [1, 81]
+finish_cell: 9
+finish_offset_m: 0.0   # 车体完全停入 9 号格子内
+
+# 9 个候选任务区 (中央 3×3 区域)
+task_cells: [31, 32, 33, 40, 41, 42, 49, 50, 51]
+
+# 4 个视觉读取位置 (围栏内侧贴任务信息图像)
+vision_positions: [5, 37, 77, 45]
+
+# 视觉位置 → (任务区, 车头朝向, 贴墙偏移)
+# yaw_rad: 0=东 +π/2=北 ±π=西 -π/2=南
+# offset_m: 从 cell 中心向远离围墙方向退后的距离 (避开墙角碰撞)
+vision_to_task:
+  5:  { target: 41,  yaw_rad: 1.57,  offset_m: 0.35 }   # 北墙: 向南退 0.35m
+  37: { target: 33,  yaw_rad: 3.14,  offset_m: 0.35 }   # 西墙: 向东退 0.35m
+  45: { target: 50,  yaw_rad: 0.0,   offset_m: 0.35 }   # 东墙: 向西退 0.50m (加深避开 costmap 膨胀)
+  77: { target: 31,  yaw_rad: -1.57, offset_m: 0.35 }   # 南墙: 向北退 0.35m
+
+task_region:
+  size_m: [0.38, 0.32]
+  description: "任务点区域 38cm x 32cm，在对应黄色格子中居中"
+
+# 内圈 8×8 方框边缘上的挡板 (仿真避障测试, 避开外边界)
+# cell: 参照格子  edge: 格子的哪条边 (N=北 S=南 E=东 W=西)
+# edge 必须是内部边，不能放在场地外边界；朝向自动对齐边 (yaw_deg 可覆盖)
+obstacles:
+  - { cell: 20, edge: S }   # 水平挡板
+  - { cell: 22, edge: E }   # 竖直挡板
+  - { cell: 46, edge: E }   # 竖直挡板
+  - { cell: 53, edge: N }   # 水平挡板
+  - { cell: 60, edge: S }   # 水平挡板
+
+obstacles_config:
+  board_size_m: [0.01, 0.4]
+  description: "仿真挡板厚 1cm、长 40cm；edge 表示内圈方框的哪条边"
+
+task_images:
+  count: 4
+  center_height_m: 0.20
+  placed_on_inner_fence: true
+  description: "4 张任务信息图像贴在围栏内侧，中心距地面 20cm"

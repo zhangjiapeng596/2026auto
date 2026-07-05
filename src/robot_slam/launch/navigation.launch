@@ -1,0 +1,31 @@
+<launch>
+  <param name="use_sim_time" value="false" />
+
+  <arg name="map_name" default="my_lab.yaml" />
+
+  <!-- URDF 防御加载: bringup 侧 model.launch 通过 xacro 加载，此处 textfile 直接加载作为后备 -->
+  <param name="robot_description" textfile="$(find abot_model)/urdf/abot_model.urdf"/>
+
+  <!-- 初始位姿: 默认起点 cell 1 (西北角)。competition_field.yaml 网格约定:
+       x=(col-4)*0.4, y=(4-row)*0.4 -> cell 1 (row0,col0) = (-1.6, 1.6)。
+       实车按左上角、车头朝上边墙摆放: yaw=pi/2。
+       覆盖示例: roslaunch ... initial_pose_x:=-1.6 initial_pose_y:=1.6 initial_pose_a:=1.5708 -->
+  <arg name="initial_pose_x" default="-1.6" />
+  <arg name="initial_pose_y" default="1.6" />
+  <arg name="initial_pose_a" default="1.5708" />
+
+  <node name="map_server" pkg="map_server" type="map_server" args="$(find robot_slam)/maps/$(arg map_name)"/>
+
+  <include file="$(find robot_slam)/launch/include/move_base.launch.xml" />
+
+  <include file="$(find robot_slam)/launch/include/lidar_loc.launch.xml" />
+
+  <node pkg="robot_slam" type="publish_initialpose.py" name="publish_initialpose_once" output="screen">
+    <param name="x" value="$(arg initial_pose_x)" />
+    <param name="y" value="$(arg initial_pose_y)" />
+    <param name="yaw" value="$(arg initial_pose_a)" />
+    <param name="delay" value="3.0" />
+    <param name="repeat" value="6" />
+  </node>
+
+</launch>

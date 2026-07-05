@@ -1,0 +1,51 @@
+# DWA 局部规划器参数
+# ========================================
+# 抽搐/震荡调参:
+#   目标点附近来回摆动 → 减小 xy_goal_tolerance 或增大 yaw_goal_tolerance
+#   路径震荡           → 增大 oscillation_reset_dist
+#   贴障碍物不敢靠近   → 增大 occdist_scale / 减小 inflation_radius
+#   靠近障碍物时抽搐   → 减小 sim_time / 减小 acc_lim_*
+# ========================================
+
+DWAPlannerROS:
+  # ---- 速度限制 ----
+  max_vel_x: 0.55          # 最大前进速度 (m/s)
+  min_vel_x: -0.20         # 最大后退速度
+  max_vel_y: 0.20           # 全向横移速度
+  min_vel_y: -0.20
+  max_vel_trans: 0.30       # 最大平移速度 (实际限幅)
+  min_vel_trans: 0.02       # 最小平移速度，允许厘米级靠拢任务点
+  max_vel_theta: 1.4        # 最大旋转速度 (rad/s)
+  min_vel_theta: 0.8        # 最小旋转速度
+
+  # ---- 加速度 ----
+  acc_lim_x: 2.5
+  acc_lim_theta: 3.0
+  acc_lim_y: 2.5
+
+  # ---- 到达判定 (目标点附近抽搐重点关注这里) ----
+  xy_goal_tolerance: 0.02   # 位置到达容差(m)，状态机再用任务中心/footprint 二次校验
+  yaw_goal_tolerance: 0.02  # 朝向到达容差(rad), 0.02≈1.1°
+  latch_xy_goal_tolerance: false  # true=到达位置后不再修正, 仅旋转对齐
+
+  # ---- 轨迹模拟 ----
+  sim_time: 1.7             # 前向模拟时长(s), 越大轨迹越平滑但计算越慢
+  vx_samples: 10            # x速度采样数
+  vy_samples: 7             # y速度采样数 (0=纯差分驱动, 全向轮建议5~10)
+  vth_samples: 20           # 角速度采样数
+  controller_frequency: 10.0
+
+  # ---- 代价权重 (避障行为核心) ----
+  path_distance_bias: 32.0  # 跟全局路径的权重, 越大越贴路径
+  goal_distance_bias: 24.0  # 朝目标前进的权重, 越大越直接
+  occdist_scale: 0.05       # 避障权重, 越大离障碍物越远 (0.01~0.10)
+
+  # ---- 其他 ----
+  forward_point_distance: 0.325
+  stop_time_buffer: 0.2
+  scaling_speed: 0.25
+  max_scaling_factor: 0.2
+  oscillation_reset_dist: 0.05  # 震荡检测: 移动超过此距离则重置震荡标志
+  publish_traj_pc: true          # 发布轨迹点云 (RViz 可查看候选轨迹)
+  publish_cost_grid_pc: true     # 发布代价网格点云 (RViz 可看代价分布)
+  holonomic_robot: true          # 全向底盘

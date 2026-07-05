@@ -1,0 +1,44 @@
+# Build outputs
+build/
+devel/
+install/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+logs/
+tmp/
+
+# Large model/bin files (keep locally, don't commit)
+src/robot_slam/scripts/paraformer-zh/
+src/robot_slam/resources/_snowboydetect.so
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code 本地 worktree / 会话数据 (勿提交)
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ROS
+*.bag
+*.active
+
+# Sensitive - API keys, local configs
+*.local.md
+src/abot_vlm/scripts/API_KEY*.py
+
+# Large model files (keep locally only)
+src/robot_slam/scripts/paraformer-zh/model.pt
+*.pt
+*.pth
+src/robot_slam/scripts/paraformer-zh/
+src/robot_slam/resources/_snowboydetect.so
+.catkin_workspace

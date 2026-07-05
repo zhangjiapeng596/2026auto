@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="robot_slam" type="start.py" name="game_node" output="screen"/>
+</launch>

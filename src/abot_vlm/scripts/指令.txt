@@ -1,0 +1,3 @@
+
+pip install volcengine-python-sdk  -i https://mirrors.bfsu.edu.cn/pypi/web/simple/
+pip install catkin-tools rospkg pyyaml empy numpy -i https://mirrors.bfsu.edu.cn/pypi/web/simple/

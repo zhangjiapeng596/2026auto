@@ -1,0 +1,15 @@
+<launch>
+  <arg name="base_frame" default="base_link"/>
+  <arg name="odom_frame" default="odom"/>
+  <arg name="laser_frame" default="laser_link"/>
+  <arg name="laser_topic" default="scan_filtered"/>
+
+  <node pkg="jie_ware" type="lidar_loc" name="lidar_loc" output="screen">
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="odom_frame" value="$(arg odom_frame)"/>
+    <param name="laser_frame" value="$(arg laser_frame)"/>
+    <param name="laser_topic" value="$(arg laser_topic)"/>
+  </node>
+
+  <node pkg="jie_ware" type="costmap_cleaner" name="costmap_cleaner" output="screen"/>
+</launch>

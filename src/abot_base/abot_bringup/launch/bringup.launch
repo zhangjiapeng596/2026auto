@@ -1,0 +1,5 @@
+<launch>
+    <node name="abot_driver" pkg="abot_bringup" type="abot_driver" output="screen">
+        <rosparam file="$(find abot_bringup)/params/base_params.yaml" command="load"/>
+    </node>
+</launch>

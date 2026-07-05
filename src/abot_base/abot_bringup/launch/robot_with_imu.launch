@@ -1,0 +1,9 @@
+<launch>
+  <include file="$(find abot_bringup)/launch/bringup_with_imu.launch"/>
+  <!-- 轮式里程计降权: 前进10x(降低信任), 横移+旋转35x(小辊子严重打滑) -->
+  <param name="cov_inflate/forward_factor" type="double" value="15.0"/>
+  <param name="cov_inflate/lateral_factor" type="double" value="60.0"/>
+  <param name="cov_inflate/yaw_factor" type="double" value="60.0"/>
+  <include file="$(find abot_bringup)/launch/model.launch"/>
+  <include file="$(find abot_bringup)/launch/rplidar.launch"/>
+</launch>
