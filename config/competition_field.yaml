@@ -35,7 +35,7 @@ vision_positions: [5, 37, 77, 45]
 # offset_m: 从 cell 中心向远离围墙方向退后的距离 (避开墙角碰撞)
 vision_to_task:
   5:  { target: 41,  yaw_rad: 1.57,  offset_m: 0.35 }   # 北墙: 向南退 0.35m
-  37: { target: 33,  yaw_rad: 3.14,  offset_m: 0.35 }   # 西墙: 向东退 0.35m
+  37: { target: 33,  yaw_rad: 3.14,  offset_m: 0.45 }   # 西墙: 向东退 0.45m，避开障碍/边框给转向留空间
   45: { target: 50,  yaw_rad: 0.0,   offset_m: 0.35 }   # 东墙: 向西退 0.50m (加深避开 costmap 膨胀)
   77: { target: 31,  yaw_rad: -1.57, offset_m: 0.35 }   # 南墙: 向北退 0.35m
 

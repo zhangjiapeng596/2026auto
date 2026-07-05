@@ -87,7 +87,7 @@ DWAPlannerROS:
   acc_lim_theta: 8.0          # 旋转加速度 (rad/s²), 配合提速更快到位
   # -- 到达判定 --
   xy_goal_tolerance: 0.06     # 位置容差 (m)，收紧减少与状态机的精度差
-  yaw_goal_tolerance: 0.30    # 朝向容差 (rad), ≈17.2°, DWA 早点收工
+  yaw_goal_tolerance: 0.12    # 朝向容差 (rad), ≈6.9°, 视觉点必须摆正再拍照
   latch_xy_goal_tolerance: false
   # -- 轨迹模拟 --
   sim_time: 1.5               # 前向模拟时长 (s)，适度加长评估绕障（1.7太长影响CPU）

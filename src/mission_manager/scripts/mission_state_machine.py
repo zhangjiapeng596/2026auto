@@ -504,9 +504,28 @@ class MissionStateMachine(object):
                 return
             state = self.move_base_client.get_state()
             if state == GoalStatus.SUCCEEDED:
-                rospy.loginfo('[Mission] Phase %d: Vision position reached (move_base success)', phase)
-                arrived = True
-                break
+                nav_cfg = self.mission_cfg.get('navigation', {})
+                gx, gy, gyaw = self.last_nav_goal if self.last_nav_goal is not None else (None, None, None)
+                if gx is not None and self._pose_near_goal(
+                        gx, gy, gyaw,
+                        nav_cfg.get('vision_xy_tolerance_m', 0.04),
+                        nav_cfg.get('vision_yaw_tolerance_rad', 0.12)):
+                    rospy.loginfo('[Mission] Phase %d: Vision position reached (move_base success + pose verified)',
+                                  phase)
+                    arrived = True
+                    break
+                rx, ry, ryaw = self._get_current_pose()
+                if rx is not None and gx is not None:
+                    dist = math.sqrt((rx - gx)**2 + (ry - gy)**2)
+                    yaw_diff = self._angle_diff(ryaw, gyaw)
+                    rospy.logwarn('[Mission] Phase %d: move_base succeeded but vision pose not verified '
+                                  '(dist=%.3f, yaw_diff=%.3f), retrying',
+                                  phase, dist, yaw_diff)
+                else:
+                    rospy.logwarn('[Mission] Phase %d: move_base succeeded but no pose for vision verification, retrying',
+                                  phase)
+                self._retry_perception(phase)
+                return
             if self.last_nav_goal is not None:
                 nav_cfg = self.mission_cfg.get('navigation', {})
                 gx, gy, gyaw = self.last_nav_goal
