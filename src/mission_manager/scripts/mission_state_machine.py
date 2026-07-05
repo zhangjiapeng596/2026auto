@@ -120,6 +120,10 @@ class MissionStateMachine(object):
         self.task_skip_count = 0         # 不可达任务点跳过计数
         self.footprint_retry_count = 0  # 防止 footprint 检查死循环
         self.finish_nav_retry_count = 0
+        self.finish_relay_attempt_count = 0
+        self.finish_relay_tried_cells = []
+        self.finish_relay_active = False
+        self.finish_relay_cell = None
         self.recognition_in_progress = False
         self.seen_image_ids = []  # 已识别的图像 ID，防止重复
         self.last_nav_goal = None  # 最近一次发送给 move_base 的 (x, y, yaw)
@@ -882,14 +886,122 @@ class MissionStateMachine(object):
 
     # ========== Finish Phase Handlers ==========
 
-    def _handle_navigate_to_finish(self):
+    def _get_finish_goal(self):
         finish_cell = self.field_cfg['finish_cell']
         x, y = get_cell_center_xy(finish_cell, self.field_cfg)
-        # 终点墙角偏移: 正值=向场地中心退, 负值=向墙角靠
         offset = self.field_cfg.get('finish_offset_m', 0.0)
         if abs(offset) > 0.001:
             x -= offset * (1 if x > 0 else -1) if abs(x) > 0.01 else 0
             y -= offset * (1 if y > 0 else -1) if abs(y) > 0.01 else 0
+        return finish_cell, x, y, offset
+
+    def _cell_row_col(self, cell):
+        cols = int(self.field_cfg.get('field', {}).get('grid_cols', 9))
+        return (cell - 1) // cols, (cell - 1) % cols
+
+    def _cell_from_row_col(self, row, col):
+        cols = int(self.field_cfg.get('field', {}).get('grid_cols', 9))
+        return row * cols + col + 1
+
+    def _neighbor_cell(self, cell, edge):
+        rows = int(self.field_cfg.get('field', {}).get('grid_rows', 9))
+        cols = int(self.field_cfg.get('field', {}).get('grid_cols', 9))
+        row, col = self._cell_row_col(cell)
+        if edge == 'N':
+            row -= 1
+        elif edge == 'S':
+            row += 1
+        elif edge == 'E':
+            col += 1
+        elif edge == 'W':
+            col -= 1
+        if row < 0 or row >= rows or col < 0 or col >= cols:
+            return None
+        return self._cell_from_row_col(row, col)
+
+    def _cell_edge_blocked(self, cell, edge):
+        opposite = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
+        neighbor = self._neighbor_cell(cell, edge)
+        if neighbor is None:
+            return True
+        for obs in self.field_cfg.get('obstacles', []):
+            obs_cell = obs.get('cell')
+            obs_edge = obs.get('edge')
+            if obs_cell == cell and obs_edge == edge:
+                return True
+            if obs_cell == neighbor and obs_edge == opposite[edge]:
+                return True
+        return False
+
+    def _cell_all_edges_clear(self, cell):
+        return not any(self._cell_edge_blocked(cell, edge)
+                       for edge in ('N', 'S', 'E', 'W'))
+
+    def _select_finish_relay_cell(self):
+        rows = int(self.field_cfg.get('field', {}).get('grid_rows', 9))
+        cols = int(self.field_cfg.get('field', {}).get('grid_cols', 9))
+        finish_cell, fx, fy, _ = self._get_finish_goal()
+        rx, ry, _ = self._get_current_pose()
+        if rx is None:
+            rx, ry = 0.0, 0.0
+
+        excluded = set(self.field_cfg.get('task_cells', []))
+        excluded.update(self.field_cfg.get('start_cells', []))
+        excluded.add(finish_cell)
+        excluded.update(self.finish_relay_tried_cells)
+
+        candidates = []
+        for row in range(1, rows - 1):
+            for col in range(1, cols - 1):
+                cell = self._cell_from_row_col(row, col)
+                if cell in excluded:
+                    continue
+                if not self._cell_all_edges_clear(cell):
+                    continue
+                cx, cy = get_cell_center_xy(cell, self.field_cfg)
+                dist_current = math.sqrt((cx - rx)**2 + (cy - ry)**2)
+                dist_finish = math.sqrt((cx - fx)**2 + (cy - fy)**2)
+                score = dist_current + 1.5 * dist_finish
+                candidates.append((score, cell, cx, cy))
+
+        if not candidates:
+            rospy.logwarn('[Mission] Finish relay: no clear relay cell available')
+            return None
+        candidates.sort()
+        score, cell, cx, cy = candidates[0]
+        rospy.loginfo('[Mission] Finish relay selected: cell %d (%.3f, %.3f), score=%.3f',
+                      cell, cx, cy, score)
+        return cell
+
+    def _try_finish_relay(self, reason):
+        max_attempts = self.mission_cfg.get('navigation', {}).get('finish_relay_max_attempts', 2)
+        if self.finish_relay_attempt_count >= max_attempts:
+            rospy.logwarn('[Mission] Finish relay skipped: attempts %d/%d',
+                          self.finish_relay_attempt_count, max_attempts)
+            return False
+
+        cell = self._select_finish_relay_cell()
+        if cell is None:
+            return False
+
+        self.finish_relay_attempt_count += 1
+        self.finish_relay_tried_cells.append(cell)
+        self.finish_relay_active = True
+        self.finish_relay_cell = cell
+        x, y = get_cell_center_xy(cell, self.field_cfg)
+        rospy.logwarn('[Mission] Finish relay (%s): navigating to clear cell %d (%.3f, %.3f), attempt %d/%d',
+                      reason, cell, x, y, self.finish_relay_attempt_count, max_attempts)
+        self.move_base_client.cancel_goal()
+        rospy.sleep(0.2)
+        self._stop_robot()
+        self._send_nav_goal(x, y, 0.0)
+        self.transition(MissionState.ARRIVE_FINISH)
+        return True
+
+    def _handle_navigate_to_finish(self):
+        self.finish_relay_active = False
+        self.finish_relay_cell = None
+        finish_cell, x, y, offset = self._get_finish_goal()
         rospy.loginfo('[Mission] Navigating to finish cell %d (%.3f, %.3f)%s',
                       finish_cell, x, y,
                       (' offset=%.2fm' % offset) if abs(offset) > 0.001 else '')
@@ -959,9 +1071,20 @@ class MissionStateMachine(object):
 
         arrived = arrived_by_pose or (self.move_base_client.get_state() == GoalStatus.SUCCEEDED)
 
+        if arrived and self.finish_relay_active:
+            rospy.loginfo('[Mission] Finish relay cell %d reached, heading to final finish',
+                          self.finish_relay_cell)
+            self.finish_relay_active = False
+            self.finish_relay_cell = None
+            self.finish_nav_retry_count = 0
+            self.transition(MissionState.NAVIGATE_TO_FINISH)
+            return
+
         if not arrived:
             rospy.logwarn('[Mission] Finish navigation failed (state=%d)',
                           self.move_base_client.get_state())
+            if self._try_finish_relay('finish_navigation_failed'):
+                return
             self.finish_nav_retry_count += 1
             max_retries = self.mission_cfg['timeouts']['navigation_retry_limit']
             if self.finish_nav_retry_count <= max_retries:
