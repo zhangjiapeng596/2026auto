@@ -398,6 +398,35 @@ class MissionStateMachine(object):
         eps = 0.005
         return dist <= (xy_tolerance + eps) and yaw_diff <= (yaw_tolerance + eps)
 
+    def _update_spin_timeout(self, goal_x, goal_y, xy_tolerance,
+                             last_pose, spin_since, timeout_s, label):
+        """接近目标点后若持续原地自转超过阈值，允许进入下一状态。"""
+        rx, ry, ryaw = self._get_current_pose()
+        if rx is None:
+            return last_pose, None, False
+
+        dist_to_goal = math.sqrt((rx - goal_x)**2 + (ry - goal_y)**2)
+        if dist_to_goal > (xy_tolerance + 0.005):
+            return (rx, ry, ryaw), None, False
+
+        if last_pose is None:
+            return (rx, ry, ryaw), None, False
+
+        last_x, last_y, last_yaw = last_pose
+        move_dist = math.sqrt((rx - last_x)**2 + (ry - last_y)**2)
+        yaw_delta = self._angle_diff(ryaw, last_yaw)
+        if move_dist < 0.02 and yaw_delta >= 0.05:
+            if spin_since is None:
+                spin_since = time.time()
+            elif time.time() - spin_since >= timeout_s:
+                rospy.logwarn('[Mission] %s: spin timeout %.1fs near goal, advancing state',
+                              label, timeout_s)
+                return (rx, ry, ryaw), spin_since, True
+        else:
+            spin_since = None
+
+        return (rx, ry, ryaw), spin_since, False
+
     def _get_task_footprint_status(self):
         """返回当前任务点 footprint 校验结果。"""
         rx, ry, ryaw = self._get_current_pose()
@@ -658,6 +687,9 @@ class MissionStateMachine(object):
         deadline = time.time() + timeout_s
         arrived = False
         costmap_retry_used = False
+        spin_timeout_s = self.mission_cfg['timeouts'].get('spin_to_next_state_s', 5.0)
+        spin_since = None
+        last_spin_pose = None
 
         while time.time() < deadline:
             if self._check_aborted():
@@ -702,6 +734,17 @@ class MissionStateMachine(object):
                     self.move_base_client.cancel_goal()
                     arrived = True
                     break
+                if spin_timeout_s > 0:
+                    last_spin_pose, spin_since, spin_done = self._update_spin_timeout(
+                        gx, gy,
+                        nav_cfg.get('vision_xy_tolerance_m', 0.04),
+                        last_spin_pose, spin_since, spin_timeout_s,
+                        'Phase %d vision' % phase)
+                    if spin_done:
+                        self.move_base_client.cancel_goal()
+                        self._stop_robot()
+                        arrived = True
+                        break
             if state in (GoalStatus.ABORTED, GoalStatus.REJECTED,
                          GoalStatus.RECALLED, GoalStatus.PREEMPTED, GoalStatus.LOST):
                 rospy.logwarn('[Mission] Phase %d: Nav to vision failed (state=%d), retrying',
@@ -1181,6 +1224,9 @@ class MissionStateMachine(object):
         costmap_retry_used = False
         check_interval = self.mission_cfg.get('waits', {}).get('nav_poll_interval_s', 1.0)
         arrived_by_pose = False
+        spin_timeout_s = self.mission_cfg['timeouts'].get('spin_to_next_state_s', 5.0)
+        spin_since = None
+        last_spin_pose = None
 
         while time.time() < deadline:
             if self._check_aborted():
@@ -1205,6 +1251,17 @@ class MissionStateMachine(object):
                     arrived_by_pose = True
                     self.move_base_client.cancel_goal()
                     break
+                if spin_timeout_s > 0:
+                    last_spin_pose, spin_since, spin_done = self._update_spin_timeout(
+                        gx, gy,
+                        nav_cfg.get('finish_xy_tolerance_m', 0.05),
+                        last_spin_pose, spin_since, spin_timeout_s,
+                        'Finish')
+                    if spin_done:
+                        arrived_by_pose = True
+                        self.move_base_client.cancel_goal()
+                        self._stop_robot()
+                        break
             if state in (GoalStatus.ABORTED, GoalStatus.REJECTED,
                          GoalStatus.RECALLED, GoalStatus.PREEMPTED, GoalStatus.LOST):
                 if not costmap_retry_used and self._retry_current_goal_after_costmap_clear(
@@ -1510,7 +1567,7 @@ class MissionStateMachine(object):
         """检查比赛全局超时。"""
         mission_elapsed = time.time() - self.mission_start_time
         max_time = self.mission_cfg['mission']['max_time_s']
-        if mission_elapsed > max_time:
+        if max_time > 0 and mission_elapsed > max_time:
             rospy.logerr('[Mission] Mission timeout: %.1fs > %ds', mission_elapsed, max_time)
             self.transition(MissionState.ABORT_TIMEOUT)
             return

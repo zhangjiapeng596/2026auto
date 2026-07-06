@@ -3,7 +3,7 @@
 
 mission:
   map_name: competition_field      # 地图名 (competition_field / game / my_lab)
-  max_time_s: 600                  # 比赛总时长上限 (10分钟)
+  max_time_s: 0                    # 比赛总时长上限；0 表示不按总时长中止
   required_task_image_count: 4     # 需要完成的任务图像数量
   require_start_voice: true        # 是否需要开始语音
   require_finish_voice: true       # 是否需要结束语音
@@ -22,6 +22,7 @@ timeouts:
   footprint_retry_limit: 2         # 到达后 footprint 修正次数，避免厘米级误差反复等待
   navigation_goal_timeout_s: 30    # 单次导航超时（30s 后触发重试/恢复）
   nav_stuck_timeout_s: 10.0        # 导航卡死检测 (位移<2cm且yaw变化<0.05rad)
+  spin_to_next_state_s: 5.0        # 接近目标后原地自转超过该时长，直接进入下一状态
 
 # ---- 等待时长 (全部可调) ----
 waits:
