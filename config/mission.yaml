@@ -16,7 +16,7 @@ mission:
 timeouts:
   no_motion_after_start_s: 40      # 启动后无运动超时 (safety_monitor 用)，放宽给 costmap 初始化
   no_state_change_s: 180           # 单状态最长停留时间 (导航+识别可能较长)
-  perception_retry_limit: 1        # 识别失败最大重试次数 (省token，仅重试1次)
+  perception_retry_limit: 2        # 识别失败最大重试次数；失败后最多重试2次
   navigation_retry_limit: 2        # 导航失败最大重试次数
   max_task_skips: 1               # 最多跳过几个不可达任务点，超限后 ABORT
   footprint_retry_limit: 2         # 到达后 footprint 修正次数，避免厘米级误差反复等待

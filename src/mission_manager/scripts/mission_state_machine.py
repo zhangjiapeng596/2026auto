@@ -276,8 +276,10 @@ class MissionStateMachine(object):
 
             phase = self.task_index + 1
             if image_id and image_id in self.seen_image_ids:
-                rospy.logwarn('[Mission] Phase %d: Duplicate image %s, retrying...', phase, image_id)
-                self._retry_perception(phase)
+                rospy.logwarn('[Mission] Phase %d: Duplicate image %s', phase, image_id)
+                self.vision_result = {'ok': False, 'reason': 'duplicate_image'}
+                self.recognition_in_progress = False
+                self.vision_result_event.set()
                 return
 
             if confidence >= min_conf:
@@ -288,13 +290,26 @@ class MissionStateMachine(object):
                 self.perception_retry_count = 0
                 self.recognition_in_progress = False
                 self.vision_result = result
+                self.vision_result['ok'] = True
                 self.vision_result_event.set()
             else:
-                rospy.logwarn('[Mission] Low confidence %.2f < %.2f, retrying...',
+                rospy.logwarn('[Mission] Low confidence %.2f < %.2f',
                               confidence, min_conf)
-                self._retry_perception(phase)
+                self.vision_result = {
+                    'ok': False,
+                    'reason': 'low_confidence',
+                    'confidence': confidence,
+                    'min_confidence': min_conf,
+                    'target_cell': result.get('target_cell'),
+                    'image_id': image_id,
+                }
+                self.recognition_in_progress = False
+                self.vision_result_event.set()
         except (ValueError, KeyError, TypeError) as e:
             rospy.logerr('[Mission] Invalid vision result: %s', str(e))
+            self.vision_result = {'ok': False, 'reason': 'invalid_result', 'error': str(e)}
+            self.recognition_in_progress = False
+            self.vision_result_event.set()
 
     def _update_pose(self, source, x, y, yaw):
         """按优先级仲裁更新 current_pose：高优先级源一旦出现，低优先级源不再覆盖。
@@ -729,6 +744,7 @@ class MissionStateMachine(object):
         trigger_delay = self.mission_cfg.get('waits', {}).get('vision_trigger_delay_s', 0.5)
         rospy.sleep(trigger_delay)
         self.recognition_in_progress = True
+        self.vision_result = None
         self.vision_result_event.clear()
         rospy.set_param('/top_view_shot_node/im_flag', 1)
         rospy.loginfo('[Mission] Phase %d: VLM triggered at vision position', phase)
@@ -740,6 +756,14 @@ class MissionStateMachine(object):
         if not detected or self.recognition_in_progress:
             rospy.logwarn('[Mission] Phase %d: No vision result (%.1fs timeout), retrying',
                           phase, result_timeout)
+            self.recognition_in_progress = False
+            self._retry_perception(phase)
+            return
+
+        if not self.vision_result or not self.vision_result.get('ok', False):
+            reason = self.vision_result.get('reason', 'unknown') if self.vision_result else 'empty_result'
+            rospy.logwarn('[Mission] Phase %d: Vision result rejected (%s), retrying',
+                          phase, reason)
             self._retry_perception(phase)
             return
 
