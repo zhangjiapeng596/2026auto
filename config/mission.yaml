@@ -20,7 +20,7 @@ timeouts:
   navigation_retry_limit: 2        # 导航失败最大重试次数
   max_task_skips: 1               # 最多跳过几个不可达任务点，超限后 ABORT
   footprint_retry_limit: 2         # 到达后 footprint 修正次数，避免厘米级误差反复等待
-  navigation_goal_timeout_s: 45    # 单次导航超时（45s 后触发重试/恢复）
+  navigation_goal_timeout_s: 30    # 单次导航超时（30s 后触发重试/恢复）
   nav_stuck_timeout_s: 10.0        # 导航卡死检测 (位移<2cm且yaw变化<0.05rad)
 
 # ---- 等待时长 (全部可调) ----
