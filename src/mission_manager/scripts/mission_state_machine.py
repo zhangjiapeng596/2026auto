@@ -114,8 +114,6 @@ class MissionStateMachine(object):
         self.vision_phase = True       # True=视觉采集阶段, False=任务执行阶段
         self.collected_targets = []    # 视觉阶段收集的目标格子号列表
         self.vision_attempted_phases = []  # 已尝试过的视觉点序号
-        self.vision_deferred_phases = []   # 首次失败后等待最后补识别的视觉点
-        self.vision_final_retry_phases = [] # 已进入最后补识别的视觉点
         self.vision_completed_phases = []  # 已成功识别的视觉点序号
         self.state_start_time = time.time()
         self.mission_start_time = time.time()
@@ -491,8 +489,6 @@ class MissionStateMachine(object):
         self.vision_phase = True
         self.collected_targets = []
         self.vision_attempted_phases = []
-        self.vision_deferred_phases = []
-        self.vision_final_retry_phases = []
         self.vision_completed_phases = []
         self.target_cell = None
         phase = self.task_index + 1
@@ -573,11 +569,8 @@ class MissionStateMachine(object):
                       self.collected_targets)
         self.transition(MissionState.task_image_state(1, 'NAVIGATE_TO_TASK'))
 
-    def _is_final_vision_retry(self, phase):
-        return phase in self.vision_final_retry_phases
-
     def _advance_to_next_vision_or_tasks(self, current_phase):
-        """继续未尝试视觉点；全部尝试后，补识别待补点；最后进入任务导航。"""
+        """继续未尝试视觉点；全部尝试后进入任务导航。"""
         required = self._required_vision_count()
 
         next_phase = None
@@ -585,12 +578,6 @@ class MissionStateMachine(object):
             if phase not in self.vision_attempted_phases:
                 next_phase = phase
                 break
-
-        if next_phase is None and self.vision_deferred_phases:
-            next_phase = self.vision_deferred_phases.pop(0)
-            if next_phase not in self.vision_final_retry_phases:
-                self.vision_final_retry_phases.append(next_phase)
-            rospy.logwarn('[Mission] Revisiting deferred vision phase %d after normal pass', next_phase)
 
         if next_phase is None:
             self._start_task_execution_or_abort()
@@ -604,17 +591,10 @@ class MissionStateMachine(object):
         self.transition(MissionState.task_image_state(next_phase, 'SEARCH_TASK_IMAGE'))
 
     def _defer_or_skip_vision_phase(self, phase, reason):
-        """视觉点失败：首次失败放到最后补识别；补识别仍失败则永久跳过。"""
+        """视觉点失败：直接跳过，不再放到最后补识别。"""
         self.move_base_client.cancel_goal()
         self._stop_robot()
-        if phase not in self.vision_final_retry_phases:
-            if phase not in self.vision_deferred_phases:
-                self.vision_deferred_phases.append(phase)
-            rospy.logwarn('[Mission] Phase %d: Vision point deferred (%s). Deferred queue=%s',
-                          phase, reason, self.vision_deferred_phases)
-        else:
-            rospy.logwarn('[Mission] Phase %d: Vision point skipped after final retry (%s)',
-                          phase, reason)
+        rospy.logwarn('[Mission] Phase %d: Vision point skipped (%s)', phase, reason)
         self._advance_to_next_vision_or_tasks(phase)
 
     def _try_vision_recovery(self, phase, reason):
@@ -681,11 +661,7 @@ class MissionStateMachine(object):
 
         与 _handle_recognize_task_image 拆分：导航归导航，识别归识别。
         """
-        final_retry = self._is_final_vision_retry(phase)
-        if final_retry:
-            timeout_s = self.mission_cfg['timeouts'].get('deferred_vision_nav_timeout_s', 20.0)
-        else:
-            timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 20)
+        timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 20)
         deadline = time.time() + timeout_s
         arrived = False
         costmap_retry_used = False
@@ -719,9 +695,6 @@ class MissionStateMachine(object):
                 else:
                     rospy.logwarn('[Mission] Phase %d: move_base succeeded but no pose for vision verification, retrying',
                                   phase)
-                if final_retry:
-                    self._defer_or_skip_vision_phase(phase, 'final_retry_pose_not_verified')
-                    return
                 if self._try_vision_recovery(phase, 'pose_not_verified'):
                     arrived = True
                     break
@@ -752,9 +725,6 @@ class MissionStateMachine(object):
                          GoalStatus.RECALLED, GoalStatus.PREEMPTED, GoalStatus.LOST):
                 rospy.logwarn('[Mission] Phase %d: Nav to vision failed (state=%d), retrying',
                               phase, state)
-                if final_retry:
-                    self._defer_or_skip_vision_phase(phase, 'final_retry_nav_failed_state_%d' % state)
-                    return
                 if not costmap_retry_used and self._retry_current_goal_after_costmap_clear(
                         'vision_failed_state_%d' % state):
                     costmap_retry_used = True
@@ -771,10 +741,6 @@ class MissionStateMachine(object):
         if not arrived:
             rospy.logwarn('[Mission] Phase %d: Nav to vision timed out (%.1fs), retrying',
                           phase, timeout_s)
-            if final_retry:
-                self.move_base_client.cancel_goal()
-                self._defer_or_skip_vision_phase(phase, 'final_retry_nav_timeout')
-                return
             if not costmap_retry_used and self._retry_current_goal_after_costmap_clear('vision_timeout'):
                 costmap_retry_used = True
                 arrived = self._wait_for_current_vision_goal(phase, timeout_s)
@@ -794,7 +760,6 @@ class MissionStateMachine(object):
 
     def _handle_recognize_task_image(self, phase):
         """机器人已到达视觉位置，触发 VLM 拍照识别，获取任务区号。"""
-        final_retry = self._is_final_vision_retry(phase)
         trigger_delay = self.mission_cfg.get('waits', {}).get('vision_trigger_delay_s', 0.5)
         rospy.sleep(trigger_delay)
         self.recognition_in_progress = True
@@ -811,9 +776,6 @@ class MissionStateMachine(object):
             rospy.logwarn('[Mission] Phase %d: No vision result (%.1fs timeout), retrying',
                           phase, result_timeout)
             self.recognition_in_progress = False
-            if final_retry:
-                self._defer_or_skip_vision_phase(phase, 'final_retry_no_vision_result')
-                return
             self._retry_perception(phase)
             return
 
@@ -821,9 +783,6 @@ class MissionStateMachine(object):
             reason = self.vision_result.get('reason', 'unknown') if self.vision_result else 'empty_result'
             rospy.logwarn('[Mission] Phase %d: Vision result rejected (%s), retrying',
                           phase, reason)
-            if final_retry:
-                self._defer_or_skip_vision_phase(phase, 'final_retry_vision_rejected_%s' % reason)
-                return
             self._retry_perception(phase)
             return
 
@@ -1683,25 +1642,13 @@ class MissionStateMachine(object):
             self.transition(MissionState.ABORT_LOCALIZATION_LOST)
 
     def _retry_perception(self, phase):
-        """处理识别重试：重置旋转计数器，从头开始搜索。"""
-        if self._is_final_vision_retry(phase):
-            rospy.logwarn('[Mission] Phase %d: Final vision retry failed, skipping point', phase)
-            self._defer_or_skip_vision_phase(phase, 'final_retry_perception_failed')
-            return
-        max_retries = self.mission_cfg['timeouts']['perception_retry_limit']
-        self.perception_retry_count += 1
-        if self.perception_retry_count > max_retries:
-            rospy.logerr('[Mission] Phase %d: Max perception retries (%d) exceeded',
-                         phase, max_retries)
-            self._defer_or_skip_vision_phase(phase, 'perception_retry_exceeded')
-            return
-        rospy.loginfo('[Mission] Perception retry %d/%d, re-navigating to vision position',
-                      self.perception_retry_count, max_retries)
+        """识别失败直接跳过当前视觉点。"""
+        rospy.logwarn('[Mission] Phase %d: Perception failed, skipping vision point', phase)
         text = self.voice_cfg['voice_text']['task_image_failed']
         self._speak(text)
         self.recognition_in_progress = False
         self.vision_result_event.clear()
-        self.transition(MissionState.task_image_state(phase, 'SEARCH_TASK_IMAGE'))
+        self._defer_or_skip_vision_phase(phase, 'perception_failed')
 
 
 if __name__ == '__main__':

@@ -16,12 +16,10 @@ mission:
 timeouts:
   no_motion_after_start_s: 40      # 启动后无运动超时 (safety_monitor 用)，放宽给 costmap 初始化
   no_state_change_s: 180           # 单状态最长停留时间 (导航+识别可能较长)
-  perception_retry_limit: 2        # 识别失败最大重试次数；失败后最多重试2次
   navigation_retry_limit: 2        # 导航失败最大重试次数
   max_task_skips: 1               # 最多跳过几个不可达任务点，超限后 ABORT
   footprint_retry_limit: 2         # 到达后 footprint 修正次数，避免厘米级误差反复等待
-  navigation_goal_timeout_s: 20    # 单次导航超时（30s 后触发重试/恢复）
-  deferred_vision_nav_timeout_s: 20.0 # 待补识别点回访导航超时；超时直接放弃该点
+  navigation_goal_timeout_s: 20    # 单次导航超时（20s 后触发重试/恢复）
   nav_stuck_timeout_s: 10.0        # 导航卡死检测 (位移<2cm且yaw变化<0.05rad)
   nav_spin_timeout_s: 5.0          # move_base 导航中原地自转超过该时长，强制停止并进入下一状态
 
