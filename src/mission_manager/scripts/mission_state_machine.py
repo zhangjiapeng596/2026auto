@@ -804,7 +804,7 @@ class MissionStateMachine(object):
         rospy.loginfo('[Mission] Phase %d: VLM triggered at vision position', phase)
 
         # 等待识别结果
-        result_timeout = 10.0
+        result_timeout = 5.0
         detected = self.vision_result_event.wait(timeout=result_timeout)
 
         if not detected or self.recognition_in_progress:
