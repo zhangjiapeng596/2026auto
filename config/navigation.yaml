@@ -103,7 +103,7 @@ DWAPlannerROS:
   # -- 代价权重 --
   path_distance_bias: 12.0    # 适度降低路径跟随（15→12），允许绕障偏离
   goal_distance_bias: 32.0    # 轻度降低目标引力（35→32），给绕障留空间
-  occdist_scale: 0.18         # 提高避障权重，减少贴边框/挡板擦行
+  occdist_scale: 0.20         # 提高避障权重，减少贴边框/挡板擦行
   # -- 其他 --
   forward_point_distance: 0.325
   stop_time_buffer: 0.2       # 碰撞前停车缓冲 (s)
