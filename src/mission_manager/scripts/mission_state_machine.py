@@ -642,6 +642,7 @@ class MissionStateMachine(object):
         timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 60)
         deadline = time.time() + timeout_s
         arrived = False
+        costmap_retry_used = False
 
         while time.time() < deadline:
             if self._check_aborted():
@@ -690,6 +691,11 @@ class MissionStateMachine(object):
                          GoalStatus.RECALLED, GoalStatus.PREEMPTED, GoalStatus.LOST):
                 rospy.logwarn('[Mission] Phase %d: Nav to vision failed (state=%d), retrying',
                               phase, state)
+                if not costmap_retry_used and self._retry_current_goal_after_costmap_clear(
+                        'vision_failed_state_%d' % state):
+                    costmap_retry_used = True
+                    deadline = time.time() + timeout_s
+                    continue
                 if self._try_vision_recovery(phase, 'nav_failed_state_%d' % state):
                     arrived = True
                     break
@@ -701,12 +707,16 @@ class MissionStateMachine(object):
         if not arrived:
             rospy.logwarn('[Mission] Phase %d: Nav to vision timed out (%.1fs), retrying',
                           phase, timeout_s)
-            self.move_base_client.cancel_goal()
-            if self._try_vision_recovery(phase, 'nav_timeout'):
-                arrived = True
-            else:
-                self._retry_perception(phase)
-                return
+            if not costmap_retry_used and self._retry_current_goal_after_costmap_clear('vision_timeout'):
+                costmap_retry_used = True
+                arrived = self._wait_for_current_vision_goal(phase, timeout_s)
+            if not arrived:
+                self.move_base_client.cancel_goal()
+                if self._try_vision_recovery(phase, 'nav_timeout'):
+                    arrived = True
+                else:
+                    self._retry_perception(phase)
+                    return
 
         self._stop_robot()
         # 到达后稳定等待，确保机器人完全停稳再拍照（避免运动模糊）
@@ -778,6 +788,7 @@ class MissionStateMachine(object):
         # Polling loop: 按配置间隔检查导航进度，检测卡死
         last_x, last_y, last_yaw = None, None, None
         stuck_since = None
+        costmap_retry_used = False
         check_interval = self.mission_cfg.get('waits', {}).get('nav_poll_interval_s', 1.0)
         arrived_by_footprint = False
         arrived_by_center = False
@@ -812,6 +823,13 @@ class MissionStateMachine(object):
                 break
             if state in (GoalStatus.ABORTED, GoalStatus.REJECTED,
                          GoalStatus.RECALLED, GoalStatus.PREEMPTED, GoalStatus.LOST):
+                if not costmap_retry_used and self._retry_current_goal_after_costmap_clear(
+                        'task_failed_state_%d' % state):
+                    costmap_retry_used = True
+                    deadline = time.time() + timeout_s
+                    last_x, last_y, last_yaw = None, None, None
+                    stuck_since = None
+                    continue
                 break
 
             # 检查运动进度（卡死检测 + 振荡检测）
@@ -829,6 +847,12 @@ class MissionStateMachine(object):
                     elif time.time() - stuck_since > stuck_timeout:
                         rospy.logwarn('[Mission] Phase %d: Robot stuck (no progress for %.1fs, dist=%.3f, yaw_diff=%.3f)',
                                       phase, stuck_timeout, dist, yaw_diff)
+                        if not costmap_retry_used and self._retry_current_goal_after_costmap_clear('task_stuck'):
+                            costmap_retry_used = True
+                            deadline = time.time() + timeout_s
+                            last_x, last_y, last_yaw = None, None, None
+                            stuck_since = None
+                            continue
                         self.move_base_client.cancel_goal()
                         break
             last_x, last_y, last_yaw = rx, ry, ryaw
@@ -1130,6 +1154,7 @@ class MissionStateMachine(object):
         deadline = time.time() + timeout_s
         last_x, last_y, last_yaw = None, None, None
         stuck_since = None
+        costmap_retry_used = False
         check_interval = self.mission_cfg.get('waits', {}).get('nav_poll_interval_s', 1.0)
         arrived_by_pose = False
 
@@ -1158,6 +1183,13 @@ class MissionStateMachine(object):
                     break
             if state in (GoalStatus.ABORTED, GoalStatus.REJECTED,
                          GoalStatus.RECALLED, GoalStatus.PREEMPTED, GoalStatus.LOST):
+                if not costmap_retry_used and self._retry_current_goal_after_costmap_clear(
+                        'finish_failed_state_%d' % state):
+                    costmap_retry_used = True
+                    deadline = time.time() + timeout_s
+                    last_x, last_y, last_yaw = None, None, None
+                    stuck_since = None
+                    continue
                 break
 
             rx, ry, ryaw = self._get_current_pose()
@@ -1169,6 +1201,12 @@ class MissionStateMachine(object):
                         stuck_since = time.time()
                     elif time.time() - stuck_since > stuck_timeout:
                         rospy.logwarn('[Mission] Finish: Robot stuck, retrying')
+                        if not costmap_retry_used and self._retry_current_goal_after_costmap_clear('finish_stuck'):
+                            costmap_retry_used = True
+                            deadline = time.time() + timeout_s
+                            last_x, last_y, last_yaw = None, None, None
+                            stuck_since = None
+                            continue
                         self.move_base_client.cancel_goal()
                         break
                 else:
@@ -1387,6 +1425,53 @@ class MissionStateMachine(object):
         self.move_base_client.send_goal(goal)
         self.last_nav_goal = (x, y, yaw)
         rospy.loginfo('[Mission] Nav goal sent: (%.3f, %.3f, %.2f rad)', x, y, yaw)
+
+    def _retry_current_goal_after_costmap_clear(self, reason):
+        """清掉旧障碍缓存后重发最近目标。每个调用方负责限制重试次数。"""
+        if self.last_nav_goal is None:
+            rospy.logwarn('[Mission] Cannot retry nav after costmap clear (%s): no last goal', reason)
+            return False
+        x, y, yaw = self.last_nav_goal
+        rospy.logwarn('[Mission] Retrying current nav goal after costmap clear (%s)', reason)
+        self.move_base_client.cancel_goal()
+        rospy.sleep(0.2)
+        self._clear_costmaps(reason)
+        rospy.sleep(0.2)
+        self._send_nav_goal(x, y, yaw)
+        return True
+
+    def _wait_for_current_vision_goal(self, phase, timeout_s):
+        """清图重发视觉点目标后，短等待一次到达结果。"""
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            if self._check_aborted():
+                self.move_base_client.cancel_goal()
+                return False
+            state = self.move_base_client.get_state()
+            if state == GoalStatus.SUCCEEDED:
+                nav_cfg = self.mission_cfg.get('navigation', {})
+                gx, gy, gyaw = self.last_nav_goal if self.last_nav_goal is not None else (None, None, None)
+                if gx is not None and self._pose_near_goal(
+                        gx, gy, gyaw,
+                        nav_cfg.get('vision_xy_tolerance_m', 0.04),
+                        nav_cfg.get('vision_yaw_tolerance_rad', 0.12)):
+                    return True
+            if self.last_nav_goal is not None:
+                nav_cfg = self.mission_cfg.get('navigation', {})
+                gx, gy, gyaw = self.last_nav_goal
+                if self._pose_near_goal(
+                        gx, gy, gyaw,
+                        nav_cfg.get('vision_xy_tolerance_m', 0.04),
+                        nav_cfg.get('vision_yaw_tolerance_rad', 0.12)):
+                    rospy.loginfo('[Mission] Phase %d: Vision pose reached after costmap clear retry',
+                                  phase)
+                    self.move_base_client.cancel_goal()
+                    return True
+            if state in (GoalStatus.ABORTED, GoalStatus.REJECTED,
+                         GoalStatus.RECALLED, GoalStatus.PREEMPTED, GoalStatus.LOST):
+                return False
+            rospy.sleep(self.mission_cfg.get('waits', {}).get('nav_poll_interval_s', 1.0))
+        return False
 
     def _clear_costmaps(self, reason):
         """清理动态障碍层，防止上一个任务点的局部障碍残留影响下一段规划。"""
