@@ -21,6 +21,7 @@ timeouts:
   max_task_skips: 1               # 最多跳过几个不可达任务点，超限后 ABORT
   footprint_retry_limit: 2         # 到达后 footprint 修正次数，避免厘米级误差反复等待
   navigation_goal_timeout_s: 30    # 单次导航超时（30s 后触发重试/恢复）
+  deferred_vision_nav_timeout_s: 20.0 # 待补识别点回访导航超时；超时直接放弃该点
   nav_stuck_timeout_s: 10.0        # 导航卡死检测 (位移<2cm且yaw变化<0.05rad)
   nav_spin_timeout_s: 5.0          # move_base 导航中原地自转超过该时长，强制停止并进入下一状态
 
