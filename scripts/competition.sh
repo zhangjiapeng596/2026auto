@@ -389,7 +389,26 @@ echo "[内层] === 竞赛启动 $(date '+%H:%M:%S') ==="
 echo "[内层] 地图: ${MAP_NAME}  模式: ${SIM_MODE}"
 
 # [1] roscore
-echo '[1/5] roscore...'
+echo '
+# 启动前自动检测并纠正 /dev/rplidar 和 /dev/abot 软链接
+python3 -c "
+import os, serial, subprocess
+lidar_port, chassis_port = None, None
+for port in ['/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/ttyUSB2']:
+    if not os.path.exists(port): continue
+    try:
+        s = serial.Serial(port, 115200, timeout=0.6)
+        data = s.read(40)
+        s.close()
+        if len(data) > 10: lidar_port = port
+        else: chassis_port = port
+    except Exception: pass
+if lidar_port:
+    if not chassis_port: chassis_port = '/dev/ttyUSB0' if lidar_port == '/dev/ttyUSB1' else '/dev/ttyUSB1'
+    subprocess.call('echo 123456 | sudo -S rm -f /dev/rplidar /dev/abot && echo 123456 | sudo -S ln -s %s /dev/rplidar && echo 123456 | sudo -S ln -s %s /dev/abot' % (lidar_port, chassis_port), shell=True)
+" 2>/dev/null || true
+
+[1/5] roscore...'
 roscore > /tmp/comp_roscore.log 2>&1 &
 track $!
 sleep 5
