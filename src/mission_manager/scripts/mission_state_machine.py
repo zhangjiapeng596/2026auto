@@ -461,18 +461,25 @@ class MissionStateMachine(object):
 
     def _handle_task_phase(self):
         """处理 4 轮任务中的当前阶段。"""
-        phase = self.task_index + 1
-
         current_step = None
+        phase = None
         for step in self.TASK_PHASE_STEPS:
-            expected_state = MissionState.task_image_state(phase, step)
-            if self.state == expected_state:
+            prefix = step + '_'
+            if self.state.value.startswith(prefix):
+                phase_text = self.state.value[len(prefix):]
+                try:
+                    phase = int(phase_text)
+                except ValueError:
+                    rospy.logerr('[Mission] Invalid task state phase: %s', self.state.value)
+                    return
                 current_step = step
                 break
 
         if current_step is None:
             rospy.logerr('[Mission] Unknown task state: %s', self.state.value)
             return
+
+        self.task_index = phase - 1
 
         if current_step == 'SEARCH_TASK_IMAGE':
             self._handle_search_task_image(phase)
