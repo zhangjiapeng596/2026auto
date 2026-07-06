@@ -78,18 +78,18 @@ local_costmap:
 # ---- DWA 局部规划器 ----
 DWAPlannerROS:
   # -- 速度 --
-  max_vel_x: 0.55             # 最大前向速度 (m/s)
+  max_vel_x: 0.45             # 最大前向速度 (m/s)，降低打滑风险
   min_vel_x: -0.20            # 最大后退速度
   max_vel_y: 0.20             # 全向横移速度 (m/s)
   min_vel_y: -0.20
-  max_vel_trans: 0.55         # 实际平移限幅
+  max_vel_trans: 0.45         # 实际平移限幅
   min_vel_trans: 0.02
-  max_vel_theta: 5.0          # 最大旋转速度 (rad/s), 窄空间快速调整
+  max_vel_theta: 3.5          # 最大旋转速度 (rad/s)，降低急转打滑
   min_vel_theta: 0.01         # 最小旋转速度，极致慢旋
   # -- 加速度 --
-  acc_lim_x: 2.5              # 前向加速度 (m/s²)
+  acc_lim_x: 1.8              # 前向加速度 (m/s²)，降低起步/刹车打滑
   acc_lim_y: 2.5              # 横移加速度
-  acc_lim_theta: 8.0          # 旋转加速度 (rad/s²), 配合提速更快到位
+  acc_lim_theta: 5.0          # 旋转加速度 (rad/s²)，降低急转打滑
   # -- 到达判定 --
   xy_goal_tolerance: 0.06     # 位置容差 (m)，收紧减少与状态机的精度差
   yaw_goal_tolerance: 0.10    # 朝向容差 (rad), ≈5.7°
@@ -103,7 +103,7 @@ DWAPlannerROS:
   # -- 代价权重 --
   path_distance_bias: 12.0    # 适度降低路径跟随（15→12），允许绕障偏离
   goal_distance_bias: 32.0    # 轻度降低目标引力（35→32），给绕障留空间
-  occdist_scale: 0.20         # 提高避障权重，减少贴边框/挡板擦行
+  occdist_scale: 0.25         # 提高避障权重，减少贴边框/挡板擦行
   # -- 其他 --
   forward_point_distance: 0.325
   stop_time_buffer: 0.2       # 碰撞前停车缓冲 (s)
