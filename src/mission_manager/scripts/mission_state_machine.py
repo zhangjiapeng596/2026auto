@@ -678,7 +678,7 @@ class MissionStateMachine(object):
 
         与 _handle_recognize_task_image 拆分：导航归导航，识别归识别。
         """
-        timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 60)
+        timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 30)
         deadline = time.time() + timeout_s
         arrived = False
         costmap_retry_used = False
@@ -841,7 +841,7 @@ class MissionStateMachine(object):
         self.transition(MissionState.task_image_state(phase, 'ARRIVE_TASK'))
 
     def _handle_arrive_task(self, phase):
-        timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 60)
+        timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 30)
         stuck_timeout = self.mission_cfg['timeouts'].get('nav_stuck_timeout_s', 10.0)
         deadline = time.time() + timeout_s
 
@@ -1222,7 +1222,7 @@ class MissionStateMachine(object):
         self.transition(MissionState.ARRIVE_FINISH)
 
     def _handle_arrive_finish(self):
-        timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 60)
+        timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 30)
         stuck_timeout = self.mission_cfg['timeouts'].get('nav_stuck_timeout_s', 10.0)
         deadline = time.time() + timeout_s
         last_x, last_y, last_yaw = None, None, None
