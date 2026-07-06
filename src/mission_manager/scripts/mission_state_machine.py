@@ -398,16 +398,11 @@ class MissionStateMachine(object):
         eps = 0.005
         return dist <= (xy_tolerance + eps) and yaw_diff <= (yaw_tolerance + eps)
 
-    def _update_spin_timeout(self, goal_x, goal_y, xy_tolerance,
-                             last_pose, spin_since, timeout_s, label):
-        """接近目标点后若持续原地自转超过阈值，允许进入下一状态。"""
+    def _update_nav_spin_timeout(self, last_pose, spin_since, timeout_s, label):
+        """move_base 导航中持续原地自转超过阈值时，强制停止当前旋转。"""
         rx, ry, ryaw = self._get_current_pose()
         if rx is None:
             return last_pose, None, False
-
-        dist_to_goal = math.sqrt((rx - goal_x)**2 + (ry - goal_y)**2)
-        if dist_to_goal > (xy_tolerance + 0.005):
-            return (rx, ry, ryaw), None, False
 
         if last_pose is None:
             return (rx, ry, ryaw), None, False
@@ -419,7 +414,7 @@ class MissionStateMachine(object):
             if spin_since is None:
                 spin_since = time.time()
             elif time.time() - spin_since >= timeout_s:
-                rospy.logwarn('[Mission] %s: spin timeout %.1fs near goal, advancing state',
+                rospy.logwarn('[Mission] %s: navigation spin timeout %.1fs, stopping and advancing state',
                               label, timeout_s)
                 return (rx, ry, ryaw), spin_since, True
         else:
@@ -687,7 +682,7 @@ class MissionStateMachine(object):
         deadline = time.time() + timeout_s
         arrived = False
         costmap_retry_used = False
-        spin_timeout_s = self.mission_cfg['timeouts'].get('spin_to_next_state_s', 5.0)
+        spin_timeout_s = self.mission_cfg['timeouts'].get('nav_spin_timeout_s', 5.0)
         spin_since = None
         last_spin_pose = None
 
@@ -734,17 +729,15 @@ class MissionStateMachine(object):
                     self.move_base_client.cancel_goal()
                     arrived = True
                     break
-                if spin_timeout_s > 0:
-                    last_spin_pose, spin_since, spin_done = self._update_spin_timeout(
-                        gx, gy,
-                        nav_cfg.get('vision_xy_tolerance_m', 0.04),
-                        last_spin_pose, spin_since, spin_timeout_s,
-                        'Phase %d vision' % phase)
-                    if spin_done:
-                        self.move_base_client.cancel_goal()
-                        self._stop_robot()
-                        arrived = True
-                        break
+            if spin_timeout_s > 0:
+                last_spin_pose, spin_since, spin_done = self._update_nav_spin_timeout(
+                    last_spin_pose, spin_since, spin_timeout_s,
+                    'Phase %d vision' % phase)
+                if spin_done:
+                    self.move_base_client.cancel_goal()
+                    self._stop_robot()
+                    arrived = True
+                    break
             if state in (GoalStatus.ABORTED, GoalStatus.REJECTED,
                          GoalStatus.RECALLED, GoalStatus.PREEMPTED, GoalStatus.LOST):
                 rospy.logwarn('[Mission] Phase %d: Nav to vision failed (state=%d), retrying',
@@ -856,6 +849,9 @@ class MissionStateMachine(object):
         last_x, last_y, last_yaw = None, None, None
         stuck_since = None
         costmap_retry_used = False
+        spin_timeout_s = self.mission_cfg['timeouts'].get('nav_spin_timeout_s', 5.0)
+        spin_since = None
+        last_spin_pose = None
         check_interval = self.mission_cfg.get('waits', {}).get('nav_poll_interval_s', 1.0)
         arrived_by_footprint = False
         arrived_by_center = False
@@ -898,6 +894,16 @@ class MissionStateMachine(object):
                     stuck_since = None
                     continue
                 break
+
+            if spin_timeout_s > 0:
+                last_spin_pose, spin_since, spin_done = self._update_nav_spin_timeout(
+                    last_spin_pose, spin_since, spin_timeout_s,
+                    'Phase %d task' % phase)
+                if spin_done:
+                    arrived_by_center = True
+                    self.move_base_client.cancel_goal()
+                    self._stop_robot()
+                    break
 
             # 检查运动进度（卡死检测 + 振荡检测）
             rx, ry, ryaw = self._get_current_pose()
@@ -1224,7 +1230,7 @@ class MissionStateMachine(object):
         costmap_retry_used = False
         check_interval = self.mission_cfg.get('waits', {}).get('nav_poll_interval_s', 1.0)
         arrived_by_pose = False
-        spin_timeout_s = self.mission_cfg['timeouts'].get('spin_to_next_state_s', 5.0)
+        spin_timeout_s = self.mission_cfg['timeouts'].get('nav_spin_timeout_s', 5.0)
         spin_since = None
         last_spin_pose = None
 
@@ -1251,17 +1257,6 @@ class MissionStateMachine(object):
                     arrived_by_pose = True
                     self.move_base_client.cancel_goal()
                     break
-                if spin_timeout_s > 0:
-                    last_spin_pose, spin_since, spin_done = self._update_spin_timeout(
-                        gx, gy,
-                        nav_cfg.get('finish_xy_tolerance_m', 0.05),
-                        last_spin_pose, spin_since, spin_timeout_s,
-                        'Finish')
-                    if spin_done:
-                        arrived_by_pose = True
-                        self.move_base_client.cancel_goal()
-                        self._stop_robot()
-                        break
             if state in (GoalStatus.ABORTED, GoalStatus.REJECTED,
                          GoalStatus.RECALLED, GoalStatus.PREEMPTED, GoalStatus.LOST):
                 if not costmap_retry_used and self._retry_current_goal_after_costmap_clear(
@@ -1272,6 +1267,15 @@ class MissionStateMachine(object):
                     stuck_since = None
                     continue
                 break
+
+            if spin_timeout_s > 0:
+                last_spin_pose, spin_since, spin_done = self._update_nav_spin_timeout(
+                    last_spin_pose, spin_since, spin_timeout_s, 'Finish')
+                if spin_done:
+                    arrived_by_pose = True
+                    self.move_base_client.cancel_goal()
+                    self._stop_robot()
+                    break
 
             rx, ry, ryaw = self._get_current_pose()
             if rx is not None and last_x is not None:
