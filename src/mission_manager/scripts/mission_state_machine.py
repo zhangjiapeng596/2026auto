@@ -777,27 +777,12 @@ class MissionStateMachine(object):
         arrived = arrived_by_footprint or arrived_by_center or (state == GoalStatus.SUCCEEDED)
 
         if not arrived:
-            rospy.logwarn('[Mission] Phase %d: Navigation failed (state=%d)',
-                          phase, state)
-            self.navigation_retry_count += 1
-            max_retries = self.mission_cfg['timeouts']['navigation_retry_limit']
-            if self.navigation_retry_count <= max_retries:
-                rospy.loginfo('[Mission] Nav retry %d/%d', self.navigation_retry_count, max_retries)
-                self.move_base_client.cancel_goal()
-                self.transition(MissionState.task_image_state(phase, 'NAVIGATE_TO_TASK'))
-                return
-            else:
-                max_skips = self.mission_cfg['timeouts'].get('max_task_skips', 1)
-                if self.task_skip_count < max_skips:
-                    rospy.logwarn('[Mission] Max nav retries exceeded, skipping task %d (skip %d/%d)',
-                                  self.target_cell, self.task_skip_count + 1, max_skips)
-                    self.task_skip_count += 1
-                    self.transition(MissionState.task_image_state(phase, 'SKIP_TASK'))
-                    return
-                else:
-                    rospy.logerr('[Mission] Max nav retries AND max skips (%d) exceeded', max_skips)
-                    self.transition(MissionState.ABORT_NAVIGATION_FAILED)
-                    return
+            rospy.logwarn('[Mission] Phase %d: Navigation failed (state=%d), cell %d unreached, skipping immediately (no retry)',
+                          phase, state, self.target_cell)
+            self.move_base_client.cancel_goal()
+            self.task_skip_count += 1
+            self.transition(MissionState.task_image_state(phase, 'SKIP_TASK'))
+            return
 
         self.navigation_retry_count = 0
         self._stop_robot()
