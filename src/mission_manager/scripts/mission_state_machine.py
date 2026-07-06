@@ -113,6 +113,10 @@ class MissionStateMachine(object):
         self.task_cells_done = []      # 已完成的任务点列表
         self.vision_phase = True       # True=视觉采集阶段, False=任务执行阶段
         self.collected_targets = []    # 视觉阶段收集的目标格子号列表
+        self.vision_attempted_phases = []  # 已尝试过的视觉点序号
+        self.vision_deferred_phases = []   # 首次失败后等待最后补识别的视觉点
+        self.vision_final_retry_phases = [] # 已进入最后补识别的视觉点
+        self.vision_completed_phases = []  # 已成功识别的视觉点序号
         self.state_start_time = time.time()
         self.mission_start_time = time.time()
         self.perception_retry_count = 0
@@ -447,6 +451,10 @@ class MissionStateMachine(object):
         self.perception_retry_count = 0
         self.vision_phase = True
         self.collected_targets = []
+        self.vision_attempted_phases = []
+        self.vision_deferred_phases = []
+        self.vision_final_retry_phases = []
+        self.vision_completed_phases = []
         self.target_cell = None
         phase = self.task_index + 1
         self.transition(MissionState.task_image_state(phase, 'SEARCH_TASK_IMAGE'))
@@ -502,6 +510,64 @@ class MissionStateMachine(object):
             y -= total_offset * math.sin(yaw)
         return x, y, yaw, vision_cell, total_offset
 
+    def _required_vision_count(self):
+        return int(self.mission_cfg.get('mission', {}).get(
+            'required_task_image_count',
+            len(self.field_cfg.get('vision_positions', [5, 37, 45, 77]))))
+
+    def _start_task_execution_or_abort(self):
+        if not self.collected_targets:
+            rospy.logerr('[Mission] No valid target cells collected after all vision attempts')
+            self.transition(MissionState.ABORT_PERCEPTION_FAILED)
+            return
+        self.vision_phase = False
+        self.task_index = 0
+        self.target_cell = self.collected_targets[0]
+        rospy.loginfo('[Mission] === Vision phase done, starting task execution: %s ===',
+                      self.collected_targets)
+        self.transition(MissionState.task_image_state(1, 'NAVIGATE_TO_TASK'))
+
+    def _advance_to_next_vision_or_tasks(self, current_phase):
+        """继续未尝试视觉点；全部尝试后，补识别待补点；最后进入任务导航。"""
+        required = self._required_vision_count()
+
+        next_phase = None
+        for phase in range(1, required + 1):
+            if phase not in self.vision_attempted_phases:
+                next_phase = phase
+                break
+
+        if next_phase is None and self.vision_deferred_phases:
+            next_phase = self.vision_deferred_phases.pop(0)
+            if next_phase not in self.vision_final_retry_phases:
+                self.vision_final_retry_phases.append(next_phase)
+            rospy.logwarn('[Mission] Revisiting deferred vision phase %d after normal pass', next_phase)
+
+        if next_phase is None:
+            self._start_task_execution_or_abort()
+            return
+
+        self.task_index = next_phase - 1
+        self.target_cell = None
+        self.perception_retry_count = 0
+        self.recognition_in_progress = False
+        self.vision_result_event.clear()
+        self.transition(MissionState.task_image_state(next_phase, 'SEARCH_TASK_IMAGE'))
+
+    def _defer_or_skip_vision_phase(self, phase, reason):
+        """视觉点失败：首次失败放到最后补识别；补识别仍失败则永久跳过。"""
+        self.move_base_client.cancel_goal()
+        self._stop_robot()
+        if phase not in self.vision_final_retry_phases:
+            if phase not in self.vision_deferred_phases:
+                self.vision_deferred_phases.append(phase)
+            rospy.logwarn('[Mission] Phase %d: Vision point deferred (%s). Deferred queue=%s',
+                          phase, reason, self.vision_deferred_phases)
+        else:
+            rospy.logwarn('[Mission] Phase %d: Vision point skipped after final retry (%s)',
+                          phase, reason)
+        self._advance_to_next_vision_or_tasks(phase)
+
     def _try_vision_recovery(self, phase, reason):
         """视觉点末端恢复：向远离墙/障碍方向退一个格子边长，再转到拍照角度。"""
         cell_size = self.field_cfg.get('field', {}).get('cell_size_m', 0.4)
@@ -546,6 +612,8 @@ class MissionStateMachine(object):
 
     def _handle_search_task_image(self, phase):
         """发送导航目标到视觉位置，然后切换到导航等待状态。"""
+        if phase not in self.vision_attempted_phases:
+            self.vision_attempted_phases.append(phase)
         x, y, yaw, vision_cell, offset_m = self._get_vision_goal(phase)
 
         rospy.loginfo('[Mission] Phase %d: Navigating to vision position cell %d (%.3f, %.3f, yaw=%.2f)%s',
@@ -668,23 +736,10 @@ class MissionStateMachine(object):
         # 视觉阶段：收集 target_cell，不立即导航
         self.collected_targets.append(self.target_cell)
         self.task_cells_done.append(self.target_cell)
+        if phase not in self.vision_completed_phases:
+            self.vision_completed_phases.append(phase)
         rospy.loginfo('[Mission] Collected targets so far: %s', self.collected_targets)
-
-        if len(self.collected_targets) >= 4:
-            # 4 个视觉点全部完成，切换到任务执行阶段
-            self.vision_phase = False
-            self.task_index = 0
-            self.target_cell = self.collected_targets[0]
-            rospy.loginfo('[Mission] === Vision phase done, starting task execution: %s ===',
-                          self.collected_targets)
-            self.transition(MissionState.task_image_state(1, 'NAVIGATE_TO_TASK'))
-        else:
-            # 继续下一个视觉点
-            self.task_index += 1
-            next_phase = self.task_index + 1
-            self.target_cell = None
-            self.perception_retry_count = 0
-            self.transition(MissionState.task_image_state(next_phase, 'SEARCH_TASK_IMAGE'))
+        self._advance_to_next_vision_or_tasks(phase)
 
     def _handle_navigate_to_task(self, phase):
         self.footprint_retry_count = 0  # 新任务，重置 footprint 重试计数
@@ -1431,8 +1486,9 @@ class MissionStateMachine(object):
         max_retries = self.mission_cfg['timeouts']['perception_retry_limit']
         self.perception_retry_count += 1
         if self.perception_retry_count > max_retries:
-            rospy.logerr('[Mission] Max perception retries (%d) exceeded', max_retries)
-            self.transition(MissionState.ABORT_PERCEPTION_FAILED)
+            rospy.logerr('[Mission] Phase %d: Max perception retries (%d) exceeded',
+                         phase, max_retries)
+            self._defer_or_skip_vision_phase(phase, 'perception_retry_exceeded')
             return
         rospy.loginfo('[Mission] Perception retry %d/%d, re-navigating to vision position',
                       self.perception_retry_count, max_retries)
