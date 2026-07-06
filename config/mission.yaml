@@ -34,7 +34,7 @@ waits:
 navigation:
   task_center_tolerance_m: 0.08    # 任务点中心容差；DWA 6cm + 状态机 8cm，消除精度差
   vision_xy_tolerance_m: 0.25      # 视觉点位置容差，放宽到25cm，避免末端偏差阻塞拍照
-  vision_yaw_tolerance_rad: 0.30   # 视觉点车头朝向容差，约 17.2°
+  vision_yaw_tolerance_rad: 0.10   # 视觉点车头朝向容差，约 5.7°
   finish_xy_tolerance_m: 0.08      # 终点位置容差，与任务点 8cm 对齐
   finish_yaw_tolerance_rad: 0.30   # 终点朝向容差（≈17°，终点不强制精确朝向）
   finish_relay_clear_radius_m: 0.18 # 终点中继点周围代价地图安全检查半径
