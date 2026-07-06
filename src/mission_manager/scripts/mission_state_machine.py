@@ -685,7 +685,7 @@ class MissionStateMachine(object):
         if final_retry:
             timeout_s = self.mission_cfg['timeouts'].get('deferred_vision_nav_timeout_s', 20.0)
         else:
-            timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 30)
+            timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 20)
         deadline = time.time() + timeout_s
         arrived = False
         costmap_retry_used = False
@@ -804,7 +804,7 @@ class MissionStateMachine(object):
         rospy.loginfo('[Mission] Phase %d: VLM triggered at vision position', phase)
 
         # 等待识别结果
-        result_timeout = 5.0
+        result_timeout = 8.0
         detected = self.vision_result_event.wait(timeout=result_timeout)
 
         if not detected or self.recognition_in_progress:
@@ -865,7 +865,7 @@ class MissionStateMachine(object):
         self.transition(MissionState.task_image_state(phase, 'ARRIVE_TASK'))
 
     def _handle_arrive_task(self, phase):
-        timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 30)
+        timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 20)
         stuck_timeout = self.mission_cfg['timeouts'].get('nav_stuck_timeout_s', 10.0)
         deadline = time.time() + timeout_s
 
@@ -1246,7 +1246,7 @@ class MissionStateMachine(object):
         self.transition(MissionState.ARRIVE_FINISH)
 
     def _handle_arrive_finish(self):
-        timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 30)
+        timeout_s = self.mission_cfg['timeouts'].get('navigation_goal_timeout_s', 20)
         stuck_timeout = self.mission_cfg['timeouts'].get('nav_stuck_timeout_s', 10.0)
         deadline = time.time() + timeout_s
         last_x, last_y, last_yaw = None, None, None
